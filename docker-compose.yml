@@ -1,0 +1,23 @@
+version: '3.9'
+
+services:
+  prism-bot:
+    build: .
+    container_name: prism-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - DB_PATH=/app/data/prism.db
+      - NODE_ENV=production
+    volumes:
+      - prism-data:/app/data
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  prism-data:
+    driver: local

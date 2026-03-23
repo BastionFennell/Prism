@@ -1,0 +1,1 @@
+ALTER TABLE `games` ADD `finished_at` integer;

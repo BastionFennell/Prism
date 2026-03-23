@@ -1,0 +1,1 @@
+ALTER TABLE `bot_config` ADD `roster_message_id` text;
