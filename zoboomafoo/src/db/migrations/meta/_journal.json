@@ -1,0 +1,41 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1774246543581,
+      "tag": "0000_slim_spot",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1774248167845,
+      "tag": "0001_jazzy_black_widow",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1774248900000,
+      "tag": "0002_reminder_30m",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1774249200000,
+      "tag": "0003_announcement_queue",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1742757600000,
+      "tag": "0004_scheduling_polls",
+      "breakpoints": true
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+version: '3.9'
+
+services:
+  zoboomafoo-bot:
+    build: .
+    container_name: zoboomafoo-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - DB_PATH=/app/data/zoboomafoo.db
+      - NODE_ENV=production
+    volumes:
+      - zoboomafoo-data:/app/data
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  zoboomafoo-data:
+    driver: local

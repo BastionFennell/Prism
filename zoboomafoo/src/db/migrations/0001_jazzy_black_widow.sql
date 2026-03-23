@@ -1,0 +1,1 @@
+ALTER TABLE `sessions` ADD `rsvp_message_id` text;

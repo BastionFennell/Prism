@@ -1,0 +1,38 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Poll {
+  id                     String         @id @default(cuid())
+  guildId                String
+  gameId                 Int
+  gameName               String
+  memberDiscordIds       String         // JSON array of discord user IDs
+  dateRangeStart         DateTime
+  dateRangeEnd           DateTime
+  sessionDurationMinutes Int
+  dailyWindowStart       String         // "18:00" (local to timezone)
+  dailyWindowEnd         String         // "23:00"
+  timezone               String
+  expiresAt              DateTime
+  status                 String         @default("collecting") // 'collecting' | 'completed' | 'expired'
+  createdAt              DateTime       @default(now())
+  availabilities         Availability[]
+}
+
+model Availability {
+  id              String   @id @default(cuid())
+  pollId          String
+  discordUserId   String
+  discordUsername String
+  slots           String   // JSON array of "YYYY-MM-DDTHH:MM" strings (local to poll timezone)
+  updatedAt       DateTime @updatedAt
+  poll            Poll     @relation(fields: [pollId], references: [id], onDelete: Cascade)
+
+  @@unique([pollId, discordUserId])
+}
