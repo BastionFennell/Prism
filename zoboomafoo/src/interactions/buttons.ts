@@ -93,9 +93,9 @@ async function handleFinishConfirm(
   await gameService.setStatus(gameId, 'finished', interaction.user.id, config);
 
   const scheduleService = new ScheduleService(db, client, config);
-  await scheduleService.renderSchedule();
+  await Promise.all([scheduleService.renderSchedule(), scheduleService.renderRoster()]);
 
-  await interaction.editReply({ content: `🏁 **${game.title}** has been marked as finished. The role has been released and the channel archived.` });
+  await interaction.editReply({ content: `🏁 **${game.title}** has been marked as finished.` });
 }
 
 async function handleArchiveConfirm(
@@ -115,9 +115,9 @@ async function handleArchiveConfirm(
   await gameService.setStatus(gameId, 'archived', interaction.user.id, config);
 
   const scheduleService = new ScheduleService(db, client, config);
-  await scheduleService.renderSchedule();
+  await Promise.all([scheduleService.renderSchedule(), scheduleService.renderRoster()]);
 
-  await interaction.editReply({ content: `⚫ **${game.title}** has been archived. The role has been released and the channel archived.` });
+  await interaction.editReply({ content: `⚫ **${game.title}** has been archived.` });
 }
 
 async function handleRemovePlayerConfirm(

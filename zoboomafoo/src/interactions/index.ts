@@ -5,6 +5,7 @@ import { handleButtonInteraction } from './buttons';
 import { handleAutocomplete } from './autocomplete';
 import { handleReactionAdd, handleReactionRemove } from './reactions';
 import { handleMention } from './mentions';
+import { handleScheduleAnnouncementContext, handleScheduleAnnouncementModal, handleCancelAnnouncementContext } from './scheduleAnnouncement';
 import type { SchedulingPollService } from '../services/SchedulingPollService';
 
 let schedulingPollService: SchedulingPollService | null = null;
@@ -37,6 +38,18 @@ export function registerInteractionHandlers(client: Client): void {
         const handler = commandHandlers.get(interaction.commandName);
         if (!handler) return;
         await handler(interaction, config);
+
+      } else if (interaction.isMessageContextMenuCommand()) {
+        if (interaction.commandName === 'Schedule Announcement') {
+          await handleScheduleAnnouncementContext(interaction, config);
+        } else if (interaction.commandName === 'Cancel Announcement') {
+          await handleCancelAnnouncementContext(interaction, config);
+        }
+
+      } else if (interaction.isModalSubmit()) {
+        if (interaction.customId.startsWith('announce-schedule:')) {
+          await handleScheduleAnnouncementModal(interaction, config);
+        }
 
       } else if (interaction.isButton()) {
         await handleButtonInteraction(interaction, config);

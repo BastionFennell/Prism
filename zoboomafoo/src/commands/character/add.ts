@@ -5,8 +5,9 @@ import { client } from '../../client';
 import { CharacterService } from '../../services/CharacterService';
 import { GameService } from '../../services/GameService';
 import { MembershipService } from '../../services/MembershipService';
-import { handleCommandError } from '../../utils/errors';
+import { handleCommandError, AppError } from '../../utils/errors';
 import { resolveGame, requireMembership } from '../../utils/context';
+import { isFounder } from '../../permissions';
 
 export const addSubcommand = new SlashCommandSubcommandBuilder()
   .setName('add')
@@ -28,6 +29,9 @@ export const addSubcommand = new SlashCommandSubcommandBuilder()
   )
   .addStringOption((o) =>
     o.setName('details').setDescription('Freeform character details').setRequired(false)
+  )
+  .addUserOption((o) =>
+    o.setName('player').setDescription('Player to link this character to (Founders only)').setRequired(false)
   );
 
 export async function handleAdd(
@@ -39,7 +43,18 @@ export async function handleAdd(
 
     const gameService = new GameService(db, client);
     const game = resolveGame(interaction, gameService);
-    requireMembership(interaction, game, new MembershipService(db), config);
+
+    const targetPlayer = interaction.options.getUser('player');
+
+    if (targetPlayer) {
+      if (!isFounder(interaction.member!, config)) {
+        throw new AppError('Only Founders can add characters on behalf of another player.');
+      }
+    } else {
+      requireMembership(interaction, game, new MembershipService(db), config);
+    }
+
+    const ownerId = targetPlayer?.id ?? interaction.user.id;
 
     const characterName = interaction.options.getString('name', true);
     const summary       = interaction.options.getString('summary')   ?? undefined;
@@ -50,7 +65,7 @@ export async function handleAdd(
     const characterService = new CharacterService(db);
     const character = characterService.addCharacter(
       game.id,
-      interaction.user.id,
+      ownerId,
       {
         characterName,
         summary,
@@ -63,8 +78,9 @@ export async function handleAdd(
       interaction.user.id
     );
 
+    const ownerNote = targetPlayer ? ` for <@${targetPlayer.id}>` : '';
     await interaction.editReply({
-      content: `✅ **${character.characterName}** added to **${game.title}**.`,
+      content: `✅ **${character.characterName}** added to **${game.title}**${ownerNote}.`,
     });
   } catch (err) {
     await handleCommandError(interaction, err);

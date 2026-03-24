@@ -1,5 +1,5 @@
 import { Client, TextChannel, EmbedBuilder, Colors } from 'discord.js';
-import { eq, asc, inArray } from 'drizzle-orm';
+import { eq, asc, inArray, and, gt } from 'drizzle-orm';
 import { DB } from '../db';
 import { sessions, games, gameMemberships, schedulePosts, botConfig, rsvps, Session, Game, Rsvp } from '../db/schema';
 import { AppConfig } from '../config';
@@ -254,10 +254,13 @@ export class ScheduleService {
     const upcomingSessions = this.db
       .select()
       .from(sessions)
-      .where(eq(sessions.gameId, gameId))
+      .where(and(
+        eq(sessions.gameId, gameId),
+        eq(sessions.status, 'scheduled'),
+        gt(sessions.startAt, now)
+      ))
       .orderBy(asc(sessions.startAt))
-      .all()
-      .filter((s) => s.status === 'scheduled' && s.startAt > now);
+      .all();
 
     const embed = new EmbedBuilder()
       .setTitle(`📅 ${gameTitle} — Upcoming Sessions`)
@@ -305,10 +308,13 @@ export class ScheduleService {
       const upcomingSessions = this.db
         .select()
         .from(sessions)
-        .where(eq(sessions.gameId, game.id))
+        .where(and(
+          eq(sessions.gameId, game.id),
+          eq(sessions.status, 'scheduled'),
+          gt(sessions.startAt, now)
+        ))
         .orderBy(asc(sessions.startAt))
-        .all()
-        .filter((s) => s.status === 'scheduled' && s.startAt > now);
+        .all();
 
       const emoji = statusEmoji[game.status] ?? '⚪';
       const channel = game.discordChannelId ? ` · <#${game.discordChannelId}>` : '';

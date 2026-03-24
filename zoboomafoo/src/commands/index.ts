@@ -4,6 +4,7 @@ import { gameCommandData, handleGameCommand } from './game';
 import { sessionCommandData, handleSessionCommand } from './session';
 import { characterCommandData, handleCharacterCommand } from './character';
 import { adminCommandData, handleAdminCommand } from './admin';
+import { scheduleAnnouncementCommandData, cancelAnnouncementCommandData } from './scheduleAnnouncement';
 
 type CommandHandler = (interaction: ChatInputCommandInteraction, config: AppConfig) => Promise<void>;
 
@@ -18,4 +19,6 @@ export const commandDataList = [
   sessionCommandData,
   characterCommandData,
   adminCommandData,
+  scheduleAnnouncementCommandData,
+  cancelAnnouncementCommandData,
 ];

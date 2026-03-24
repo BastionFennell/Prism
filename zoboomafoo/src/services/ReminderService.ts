@@ -38,19 +38,19 @@ const MESSAGES_30M = [
   (title: string, time: string, role: string) =>
     `⏰ HALF AN HOUR! The **${title}** quest begins at ${time}!\nZoboomafoo is VERY excited and so should you be!! 🦎✨ ${role}`,
   (title: string, time: string, role: string) =>
-    `🎮 IT'S ALMOST TIME FOR **${title}**!! ${time} — that's 30 minutes from RIGHT NOW!\nMove your feet, find your seat, adventure awaits!! 🌿🎲 ${role}`,
+    `🎮 IT'S ALMOST TIME FOR **${title}**!! ${time} - that's 30 minutes from RIGHT NOW!\nMove your feet, find your seat, adventure awaits!! 🌿🎲 ${role}`,
   (title: string, time: string, role: string) =>
     `🔥 HALF AN HOUR TO GO!! **${title}** starts at ${time}!!\nZoboomafoo is pacing. Zoboomafoo is ready. ARE YOU READY?? 🦎🔥 ${role}`,
   (title: string, time: string, role: string) =>
-    `🎯 30 MINUTES!! Put the snacks down — actually no, BRING the snacks — **${title}** is almost here!! ${time} ${role}`,
+    `🎯 30 MINUTES!! Put the snacks down - actually no, BRING the snacks - **${title}** is almost here!! ${time} ${role}`,
   (title: string, time: string, role: string) =>
-    `🌀 THE PORTAL OPENS IN 30 MINUTES!! **${title}** — ${time}!!\nZoboomafoo has been sitting by the door for an hour. Let's GOOO!! 🚪✨ ${role}`,
+    `🌀 THE PORTAL OPENS IN 30 MINUTES!! **${title}** - ${time}!!\nZoboomafoo has been sitting by the door for an hour. Let's GOOO!! 🚪✨ ${role}`,
   (title: string, time: string, role: string) =>
-    `⚔️ HEROES! Your destiny calls!! **${title}** begins at ${time} — that's in THIRTY MINUTES!!\nZoboomafoo believes in you. Mostly. 👀 ${role}`,
+    `⚔️ HEROES! Your destiny calls!! **${title}** begins at ${time} - that's in THIRTY MINUTES!!\nZoboomafoo believes in you. Mostly. 👀 ${role}`,
   (title: string, time: string, role: string) =>
     `🐾 *leaps out of the jungle* IT'S TIME!! Almost!! 30 minutes!! **${title}**!! ${time}!!\nZoboomafoo cannot contain himself!! 🦎💥 ${role}`,
   (title: string, time: string, role: string) =>
-    `🎶 *humming the adventure theme* la la la— OH WAIT IT'S IN 30 MINUTES!! **${title}**!! ${time}!! GO GO GO!! ${role}`,
+    `🎶 *humming the adventure theme* la la la- OH WAIT IT'S IN 30 MINUTES!! **${title}**!! ${time}!! GO GO GO!! ${role}`,
   (title: string, time: string, role: string) =>
     `🧭 FINAL CALL!! **${title}** is happening in 30 minutes — ${time}!!\nGet your character sheet. Get your vibes. Get IN HERE!! 🎲🌟 ${role}`,
 ];

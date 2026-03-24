@@ -1,4 +1,7 @@
 import { Message } from 'discord.js';
+import { eq } from 'drizzle-orm';
+import { db } from '../db';
+import { reactionBannedChannels } from '../db/schema';
 
 const RESPONSES = [
   'ZABOOOO!! 🦎🎉',
@@ -15,9 +18,9 @@ const RESPONSES = [
   'The answer, my friend, is blowing in the jungle breeze. 🌿',
   'Signs point to YES! 🦎✨',
   'The lemur has spoken: absolutely not. 🦎',
-  'Outlook unclear — Zoboomafoo is currently distracted by a bug 🐛',
+  'Outlook unclear - Zoboomafoo is currently distracted by a bug 🐛',
   'All signs point to... more snacks. 🍃',
-  'Cannot predict now — Zoboomafoo is doing his happy dance 🦎💃',
+  'Cannot predict now - Zoboomafoo is doing his happy dance 🦎💃',
   'It is certain! The jungle agrees! 🌿✅',
   'My sources say no. (The sources are bugs.) 🐛',
   'Ask again later. Zoboomafoo is napping. 😴',
@@ -31,6 +34,13 @@ export async function handleMention(message: Message): Promise<void> {
   if (message.author.bot) return;
   if (!message.client.user) return;
   if (!message.mentions.has(message.client.user.id)) return;
+
+  const banned = db
+    .select()
+    .from(reactionBannedChannels)
+    .where(eq(reactionBannedChannels.channelId, message.channelId))
+    .all();
+  if (banned.length > 0) return;
 
   await message.reply(pick(RESPONSES));
 }

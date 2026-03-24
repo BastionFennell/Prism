@@ -111,10 +111,12 @@ export const announcementQueue = sqliteTable('announcement_queue', {
   messageId:       text('message_id').notNull(),       // Discord message ID to relay
   sourceChannelId: text('source_channel_id').notNull(), // channel the message lives in
   targetChannelId: text('target_channel_id').notNull(), // channel to post it to
-  sendAt:          integer('send_at', { mode: 'timestamp' }).notNull(),
-  sentAt:          integer('sent_at', { mode: 'timestamp' }),
-  createdByUserId: text('created_by_user_id').notNull(),
-  createdAt:       integer('created_at', { mode: 'timestamp' }).notNull(),
+  sendAt:           integer('send_at', { mode: 'timestamp' }).notNull(),
+  sentAt:           integer('sent_at', { mode: 'timestamp' }),
+  confirmMessageId: text('confirm_message_id'),                        // ID of the "Announcement scheduled" bot message
+  confirmChannelId: text('confirm_channel_id'),                        // channel that message was posted in
+  createdByUserId:  text('created_by_user_id').notNull(),
+  createdAt:        integer('created_at', { mode: 'timestamp' }).notNull(),
 });
 
 // ── SchedulingPoll ─────────────────────────────────────────────────────────────
@@ -132,6 +134,12 @@ export const schedulingPolls = sqliteTable('scheduling_polls', {
   scheduledSessionId:    integer('scheduled_session_id').references(() => sessions.id),
   lastTopSlotsHash:      text('last_top_slots_hash'),                 // detect embed update needed
   createdAt:             integer('created_at').notNull().$defaultFn(() => Date.now()),
+});
+
+// ── ReactionBannedChannel ─────────────────────────────────────────────────────
+// Channels where Zoboomafoo will not react/reply to @everyone/@here pings.
+export const reactionBannedChannels = sqliteTable('reaction_banned_channels', {
+  channelId: text('channel_id').primaryKey(),
 });
 
 // ── Inferred types ────────────────────────────────────────────────────────────

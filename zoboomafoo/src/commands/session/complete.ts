@@ -44,7 +44,7 @@ export async function handleComplete(
 
     const scheduleService = new ScheduleService(db, client, config);
     scheduleService.renderSchedule().catch(console.error);
-    scheduleService.renderGameSchedule(game.id).catch(console.error);
+    scheduleService.renderGameSchedule(session.gameId).catch(console.error);
   } catch (err) {
     await handleCommandError(interaction, err);
   }

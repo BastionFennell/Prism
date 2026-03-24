@@ -1,4 +1,4 @@
-import { ChatInputCommandInteraction } from 'discord.js';
+import { ChatInputCommandInteraction, ModalSubmitInteraction } from 'discord.js';
 
 export class AppError extends Error {
   constructor(
@@ -10,8 +10,10 @@ export class AppError extends Error {
   }
 }
 
+type RepliableInteraction = ChatInputCommandInteraction | ModalSubmitInteraction;
+
 export async function replyError(
-  interaction: ChatInputCommandInteraction,
+  interaction: RepliableInteraction,
   message: string
 ): Promise<void> {
   if (interaction.replied || interaction.deferred) {
@@ -22,13 +24,14 @@ export async function replyError(
 }
 
 export async function handleCommandError(
-  interaction: ChatInputCommandInteraction,
+  interaction: RepliableInteraction,
   err: unknown
 ): Promise<void> {
   if (err instanceof AppError) {
     await replyError(interaction, err.userMessage);
   } else {
-    console.error(`[error] Unhandled error in command ${interaction.commandName}:`, err);
+    const name = 'commandName' in interaction ? interaction.commandName : interaction.customId;
+    console.error(`[error] Unhandled error in command ${name}:`, err);
     await replyError(interaction, 'An unexpected error occurred. Please try again.');
   }
 }

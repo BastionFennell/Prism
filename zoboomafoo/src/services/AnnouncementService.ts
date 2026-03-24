@@ -1,5 +1,5 @@
 import { Client, TextChannel } from 'discord.js';
-import { eq, lte, isNull } from 'drizzle-orm';
+import { eq, lte, isNull, isNotNull } from 'drizzle-orm';
 import { DB } from '../db';
 import { announcementQueue, AnnouncementQueueEntry } from '../db/schema';
 import { loadConfig } from '../config';
@@ -33,6 +33,32 @@ export class AnnouncementService {
       })
       .returning()
       .get();
+  }
+
+  saveConfirmMessage(id: number, confirmMessageId: string, confirmChannelId: string): void {
+    this.db
+      .update(announcementQueue)
+      .set({ confirmMessageId, confirmChannelId })
+      .where(eq(announcementQueue.id, id))
+      .run();
+  }
+
+  /** Cancels an unsent announcement by its confirmation message ID. Returns the entry or null if not found/already sent. */
+  cancel(confirmMessageId: string): AnnouncementQueueEntry | null {
+    const entry = this.db
+      .select()
+      .from(announcementQueue)
+      .where(eq(announcementQueue.confirmMessageId, confirmMessageId))
+      .get();
+
+    if (!entry || entry.sentAt) return null;
+
+    this.db
+      .delete(announcementQueue)
+      .where(eq(announcementQueue.id, entry.id))
+      .run();
+
+    return entry;
   }
 
   start(): void {
@@ -86,7 +112,7 @@ export class AnnouncementService {
         return;
       }
 
-      await targetChannel.send({
+      const sent = await targetChannel.send({
         content: message.content || undefined,
         embeds: message.embeds.length ? message.embeds : undefined,
       });
@@ -98,6 +124,18 @@ export class AnnouncementService {
         .run();
 
       console.log(`[AnnouncementService] Sent announcement ${entry.id} to channel ${entry.targetChannelId}.`);
+
+      if (entry.confirmMessageId && entry.confirmChannelId) {
+        try {
+          const confirmChannel = await this.client.channels.fetch(entry.confirmChannelId);
+          if (confirmChannel instanceof TextChannel) {
+            const confirmMsg = await confirmChannel.messages.fetch(entry.confirmMessageId);
+            await confirmMsg.edit(`📣 Announcement posted. [Jump to message](${sent.url})`);
+          }
+        } catch {
+          // Best-effort — don't fail the send if the confirm message is gone
+        }
+      }
     } catch (err) {
       console.warn(`[AnnouncementService] Failed to send announcement ${entry.id}:`, err);
     }

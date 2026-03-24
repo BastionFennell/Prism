@@ -18,6 +18,8 @@ import { handleCommandError, AppError } from '../../utils/errors';
 import { confirmEmbed } from '../../utils/embeds';
 import { parseSessionTime, isValidTimezone } from '../../utils/time';
 import { setupSubcommand, handleSetup } from './setup';
+import { reactionBannedChannels } from '../../db/schema';
+import { eq } from 'drizzle-orm';
 
 export const adminCommandData = new SlashCommandBuilder()
   .setName('admin')
@@ -58,13 +60,26 @@ export const adminCommandData = new SlashCommandBuilder()
   )
   .addSubcommand((s) =>
     s
+      .setName('ban-reactions')
+      .setDescription('Stop Zoboomafoo from reacting to @everyone pings in a channel')
+      .addChannelOption((o) =>
+        o.setName('channel').setDescription('Channel to mute').setRequired(true)
+      )
+  )
+  .addSubcommand((s) =>
+    s
+      .setName('unban-reactions')
+      .setDescription('Allow Zoboomafoo to react to @everyone pings in a channel again')
+      .addChannelOption((o) =>
+        o.setName('channel').setDescription('Channel to unmute').setRequired(true)
+      )
+  )
+  .addSubcommand((s) =>
+    s
       .setName('schedule-announcement')
       .setDescription('Schedule a message to be posted to a channel at a given time')
       .addStringOption((o) =>
         o.setName('message_id').setDescription('ID of the message to relay').setRequired(true)
-      )
-      .addChannelOption((o) =>
-        o.setName('source_channel').setDescription('Channel the message is in').setRequired(true)
       )
       .addChannelOption((o) =>
         o.setName('target_channel').setDescription('Channel to post it to').setRequired(true)
@@ -76,7 +91,10 @@ export const adminCommandData = new SlashCommandBuilder()
         o.setName('time').setDescription('Time in HH:MM (24-hour)').setRequired(true)
       )
       .addStringOption((o) =>
-        o.setName('timezone').setDescription('IANA timezone e.g. America/New_York').setRequired(true)
+        o.setName('timezone').setDescription('Timezone for the send time').setRequired(true).setAutocomplete(true)
+      )
+      .addChannelOption((o) =>
+        o.setName('source_channel').setDescription('Channel the message is in (defaults to current channel)').setRequired(false)
       )
   );
 
@@ -169,10 +187,10 @@ export async function handleAdminCommand(
     }
 
     if (sub === 'schedule-announcement') {
-      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      await interaction.deferReply();
 
       const messageId     = interaction.options.getString('message_id', true);
-      const sourceChannel = interaction.options.getChannel('source_channel', true);
+      const sourceChannel = interaction.options.getChannel('source_channel') ?? interaction;
       const targetChannel = interaction.options.getChannel('target_channel', true);
       const dateStr       = interaction.options.getString('date', true);
       const timeStr       = interaction.options.getString('time', true);
@@ -199,8 +217,35 @@ export async function handleAdminCommand(
         interaction.user.id
       );
 
-      await interaction.editReply({
-        content: `✅ Announcement #${entry.id} scheduled.\n📨 Message \`${messageId}\` from <#${sourceChannel.id}> → <#${targetChannel.id}>\n🕐 <t:${Math.floor(sendAt.getTime() / 1000)}:F> (<t:${Math.floor(sendAt.getTime() / 1000)}:R>)`,
+      const ts = Math.floor(sendAt.getTime() / 1000);
+      const reply = await interaction.editReply({
+        content: `📣 Announcement scheduled.\n📨 Will post to <#${targetChannel.id}>\n🕐 <t:${ts}:F> (<t:${ts}:R>)`,
+      });
+      announcementService.saveConfirmMessage(entry.id, reply.id, interaction.channelId);
+      return;
+    }
+
+    if (sub === 'ban-reactions') {
+      const channel = interaction.options.getChannel('channel', true);
+      db.insert(reactionBannedChannels)
+        .values({ channelId: channel.id })
+        .onConflictDoNothing()
+        .run();
+      await interaction.reply({
+        content: `✅ Zoboomafoo will no longer react to @everyone pings in <#${channel.id}>.`,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    if (sub === 'unban-reactions') {
+      const channel = interaction.options.getChannel('channel', true);
+      db.delete(reactionBannedChannels)
+        .where(eq(reactionBannedChannels.channelId, channel.id))
+        .run();
+      await interaction.reply({
+        content: `✅ Zoboomafoo will now react to @everyone pings in <#${channel.id}> again.`,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
