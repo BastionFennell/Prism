@@ -43,7 +43,7 @@ function dateToLocalStr(date: Date): string {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
 }
 function slotColor(count: number, total: number): string {
-  if (total === 0 || count === 0) return 'transparent';
+  if (total === 0 || count === 0) return '#1e1e20';
   const ratio = count / total;
   if (ratio >= 1.0) return '#16a34a';
   if (ratio >= 0.75) return '#22c55e';
@@ -52,24 +52,18 @@ function slotColor(count: number, total: number): string {
   return '#bbf7d0';
 }
 
+// sv-SE locale reliably produces "YYYY-MM-DD HH:MM" — no formatToParts edge cases.
 function slotToUTC(slotStr: string, pollTimezone: string): Date {
-  const y = parseInt(slotStr.slice(0, 4));
-  const mo = parseInt(slotStr.slice(5, 7)) - 1;
-  const d = parseInt(slotStr.slice(8, 10));
-  const h = parseInt(slotStr.slice(11, 13));
-  const m = parseInt(slotStr.slice(14, 16));
-  const utcMs = Date.UTC(y, mo, d, h, m);
-  const parts = new Intl.DateTimeFormat('en-US', {
+  // Treat the slot string as UTC to get an approximate timestamp, then compute
+  // the real UTC time by measuring the poll-timezone offset at that moment.
+  const guessMs = new Date(`${slotStr}:00.000Z`).getTime();
+  const localStr = new Intl.DateTimeFormat('sv-SE', {
     timeZone: pollTimezone,
     year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit', hour12: false,
-  }).formatToParts(new Date(utcMs));
-  const p: Record<string, number> = {};
-  for (const { type, value } of parts) {
-    if (type !== 'literal') p[type] = parseInt(value === '24' ? '0' : value);
-  }
-  const localMs = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute);
-  return new Date(utcMs + (utcMs - localMs));
+  }).format(new Date(guessMs)); // → "2026-03-24 09:30"
+  const localMs = new Date(localStr.replace(' ', 'T') + ':00.000Z').getTime();
+  return new Date(guessMs + (guessMs - localMs));
 }
 function formatTimeInTZ(date: Date, tz: string): string {
   const parts = new Intl.DateTimeFormat('en-US', {
@@ -249,7 +243,7 @@ export default function PollGrid({ pollData, userId }: { pollData: PollData; use
         {[
           { color: '#2563eb', border: '1px solid #3b82f6', label: 'Your selection' },
           { color: '#16a34a', border: 'none', label: 'Everyone available' },
-          { color: '#1c1c1e', border: '1px solid #3f3f46', label: 'No one available' },
+          { color: '#1e1e20', border: '1px solid #2e2e31', label: 'No one available' },
         ].map(({ color, border, label }) => (
           <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ width: 12, height: 12, background: color, border, display: 'inline-block', borderRadius: 3, flexShrink: 0 }} />
@@ -339,7 +333,7 @@ export default function PollGrid({ pollData, userId }: { pollData: PollData; use
                     border = '1px solid #60a5fa';
                   } else {
                     bg = slotColor(count, pollData.totalMembers);
-                    border = count > 0 ? 'none' : '1px solid #2a2a2a';
+                    border = count > 0 ? 'none' : '1px solid #2e2e31';
                   }
 
                   return (
