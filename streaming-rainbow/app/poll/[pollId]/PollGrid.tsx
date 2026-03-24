@@ -120,7 +120,24 @@ export default function PollGrid({
   const isClosed = pollData.status !== 'collecting';
 
   const userTimezone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, []);
-  const isDifferentTZ = userTimezone !== pollData.timezone;
+
+  // Compare actual UTC offsets rather than IANA strings — "America/Chicago" and "US/Central"
+  // are different strings but both CDT, so no conversion should happen between them.
+  const isDifferentTZ = useMemo(() => {
+    try {
+      const ref = new Date(pollData.dateRangeStart);
+      const opts: Intl.DateTimeFormatOptions = {
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', hour12: false,
+      };
+      const pollStr = new Intl.DateTimeFormat('en-US', { ...opts, timeZone: pollData.timezone }).format(ref);
+      const userStr = new Intl.DateTimeFormat('en-US', { ...opts, timeZone: userTimezone }).format(ref);
+      return pollStr !== userStr;
+    } catch {
+      return pollData.timezone !== userTimezone;
+    }
+  }, [pollData.timezone, pollData.dateRangeStart, userTimezone]);
+
   const activeTZ = showUserTZ && isDifferentTZ ? userTimezone : pollData.timezone;
 
   // Generate columns (days) and rows (time slots) — always in poll timezone
