@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma';
 import { verifyApiKey } from '@/lib/apiKey';
 import { computeTopSlots, allMembersVoted } from '@/lib/topSlots';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(
   req: NextRequest,
   { params }: { params: { pollId: string } }
