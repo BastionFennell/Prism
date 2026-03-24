@@ -205,7 +205,7 @@ export class SchedulingPollService {
     if (data.allMembersVoted || expired) {
       console.log(`[SchedulingPollService] Poll ${poll.id} ready for voting (allVoted=${data.allMembersVoted}, expired=${expired})`);
       await this.callPollEnd(poll.remotePollId);
-      await this.transitionToVoting(poll, data.topSlots);
+      await this.transitionToVoting(poll, data.topSlots, data.timezone);
     }
   }
 
@@ -255,15 +255,17 @@ export class SchedulingPollService {
 
   private async transitionToVoting(
     poll: typeof schedulingPolls.$inferSelect,
-    topSlots?: PollTopSlot[]
+    topSlots?: PollTopSlot[],
+    timezone?: string
   ): Promise<void> {
     const [game] = this.db.select().from(games).where(eq(games.id, poll.gameId)).all();
     if (!game?.discordChannelId) return;
 
-    // Fetch top slots if not provided
-    if (!topSlots) {
+    // Fetch top slots and timezone if not provided
+    if (!topSlots || !timezone) {
       const data = await this.fetchRemotePoll(poll.remotePollId);
-      topSlots = data?.topSlots ?? [];
+      topSlots = topSlots ?? data?.topSlots ?? [];
+      timezone = timezone ?? data?.timezone;
     }
 
     if (topSlots.length === 0) {
@@ -282,9 +284,19 @@ export class SchedulingPollService {
 
       const answers = topSlots.slice(0, 5).map(s => ({ text: s.label }));
 
+      const tzAbbr = timezone
+        ? (new Intl.DateTimeFormat('en-US', { timeZone: timezone, timeZoneName: 'short' })
+            .formatToParts(new Date())
+            .find(p => p.type === 'timeZoneName')?.value ?? timezone)
+        : '';
+
+      const questionText = tzAbbr
+        ? `📅 When should we play? (${tzAbbr})`
+        : '📅 When should we play?';
+
       const pollMsg = await (channel as any).send({
         poll: {
-          question: { text: '📅 When should we play?' },
+          question: { text: questionText },
           answers,
           duration: 24,
           allowMultiselect: false,
