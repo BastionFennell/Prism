@@ -31,6 +31,16 @@ export async function handleAutocomplete(
       return;
     }
 
+    if (focused.name === 'timezone') {
+      await interaction.respond([
+        { name: 'Pacific (PT)',  value: 'America/Los_Angeles' },
+        { name: 'Mountain (MT)', value: 'America/Denver' },
+        { name: 'Central (CT)',  value: 'America/Chicago' },
+        { name: 'Eastern (ET)',  value: 'America/New_York' },
+      ]);
+      return;
+    }
+
     if (focused.name === 'session') {
       const gameId = interaction.options.get('game')?.value as number | undefined;
 

@@ -48,8 +48,6 @@ export class ScheduleService {
   async renderSchedule(): Promise<void> {
     if (!this.config.scheduleChannelId) return;
 
-    await this.renderRoster();
-
     const channel = await this.client.channels.fetch(this.config.scheduleChannelId);
     if (!channel || !(channel instanceof TextChannel)) {
       console.warn('[ScheduleService] Schedule channel not found or not a text channel.');
@@ -281,89 +279,59 @@ export class ScheduleService {
 
   private buildSchedulePayloads(): EmbedBuilder[][] {
     const now = new Date();
+    const statusEmoji: Record<string, string> = { active: '🔵', paused: '🟡' };
 
-    const upcomingSessions = this.db
-      .select({ session: sessions, game: games })
-      .from(sessions)
-      .innerJoin(games, eq(sessions.gameId, games.id))
-      .where(eq(sessions.status, 'scheduled'))
-      .orderBy(asc(sessions.startAt))
-      .all()
-      .filter((row) => row.session.startAt > now);
+    const activeGames = this.db
+      .select()
+      .from(games)
+      .where(inArray(games.status, ['active', 'paused']))
+      .orderBy(asc(games.title))
+      .all();
 
-    if (upcomingSessions.length === 0) {
-      const placeholder = new EmbedBuilder()
-        .setTitle('📅 Upcoming Sessions')
-        .setDescription('No sessions are currently scheduled.')
-        .setColor(Colors.Grey);
-      return [[placeholder]];
+    if (activeGames.length === 0) {
+      return [[new EmbedBuilder()
+        .setTitle('📅 Schedule')
+        .setDescription('No games are currently active.')
+        .setColor(Colors.Grey)]];
     }
 
-    const allEmbeds = upcomingSessions.map(({ session, game }) => {
-      const embed = new EmbedBuilder()
-        .setTitle(`${game.title} — ${session.title ?? 'Session'}`)
-        .setColor(Colors.Blurple)
-        .addFields({
-          name: '🕐 Date & Time',
-          value: `${discordTimestamp(session.startAt, 'F')}\n${discordTimestamp(session.startAt, 'R')}`,
-          inline: true,
-        });
-
-      if (session.durationMinutes) {
-        embed.addFields({ name: '⏱ Duration', value: `${session.durationMinutes} min`, inline: true });
-      }
-
-      embed.addFields({ name: '🎲 GM', value: `<@${game.gmUserId}>`, inline: true });
-
-      if (game.discordChannelId) {
-        embed.addFields({ name: '📺 Channel', value: `<#${game.discordChannelId}>`, inline: true });
-      }
-
-      if (session.notes) {
-        embed.addFields({ name: 'Notes', value: session.notes.slice(0, 200), inline: false });
-      }
-
-      const sessionRsvps = this.db.select().from(rsvps).where(eq(rsvps.sessionId, session.id)).all();
-      const rsvpYes   = sessionRsvps.filter((r) => r.response === 'yes');
-      const rsvpNo    = sessionRsvps.filter((r) => r.response === 'no');
-      const rsvpMaybe = sessionRsvps.filter((r) => r.response === 'maybe');
-
-      const fmt = (list: typeof sessionRsvps) =>
-        list.length ? list.map((r) => `<@${r.userId}>`).join(' ') : '—';
-
-      embed.addFields({
-        name: `RSVPs (${sessionRsvps.length})`,
-        value: `✅ **${rsvpYes.length}** ${fmt(rsvpYes)}\n❌ **${rsvpNo.length}** ${fmt(rsvpNo)}\n❓ **${rsvpMaybe.length}** ${fmt(rsvpMaybe)}`.slice(0, 1024),
-        inline: false,
-      });
-
-      embed.setFooter({ text: `Game ID: ${game.id} • Session ID: ${session.id}` });
-
-      return embed;
-    });
-
+    // Build fields — one per game, listing its upcoming sessions.
+    // Split into multiple embeds if we hit Discord's 25-field limit.
     const messages: EmbedBuilder[][] = [];
-    let current: EmbedBuilder[] = [];
-    let currentCharCount = 0;
+    let embed = new EmbedBuilder().setTitle('📅 Schedule').setColor(Colors.Blurple);
+    let fieldCount = 0;
 
-    for (const embed of allEmbeds) {
-      const embedCharCount = this.estimateEmbedChars(embed);
+    for (const game of activeGames) {
+      const upcomingSessions = this.db
+        .select()
+        .from(sessions)
+        .where(eq(sessions.gameId, game.id))
+        .orderBy(asc(sessions.startAt))
+        .all()
+        .filter((s) => s.status === 'scheduled' && s.startAt > now);
 
-      if (
-        current.length >= MAX_EMBEDS_PER_MESSAGE ||
-        currentCharCount + embedCharCount > MAX_EMBED_CHARS_PER_MESSAGE
-      ) {
-        messages.push(current);
-        current = [];
-        currentCharCount = 0;
+      const emoji = statusEmoji[game.status] ?? '⚪';
+      const channel = game.discordChannelId ? ` · <#${game.discordChannelId}>` : '';
+      const fieldName = `${emoji} ${game.title}${channel}`;
+
+      const fieldValue = upcomingSessions.length === 0
+        ? '*No sessions scheduled*'
+        : upcomingSessions
+            .map((s) => `${discordTimestamp(s.startAt, 'F')} · ${discordTimestamp(s.startAt, 'R')}`)
+            .join('\n')
+            .slice(0, 1024);
+
+      if (fieldCount >= 25) {
+        messages.push([embed]);
+        embed = new EmbedBuilder().setTitle('📅 Schedule (cont.)').setColor(Colors.Blurple);
+        fieldCount = 0;
       }
 
-      current.push(embed);
-      currentCharCount += embedCharCount;
+      embed.addFields({ name: fieldName, value: fieldValue, inline: false });
+      fieldCount++;
     }
 
-    if (current.length > 0) messages.push(current);
-
+    messages.push([embed]);
     return messages;
   }
 

@@ -31,7 +31,7 @@ export const scheduleSubcommand = new SlashCommandSubcommandBuilder()
     o.setName('window_end').setDescription('Latest daily end time (HH:MM, 24-hour)').setRequired(true)
   )
   .addStringOption((o) =>
-    o.setName('timezone').setDescription('IANA timezone e.g. America/New_York').setRequired(true)
+    o.setName('timezone').setDescription('Timezone for the session window').setRequired(true).setAutocomplete(true)
   )
   .addIntegerOption((o) =>
     o.setName('game').setDescription('Game name (defaults to this channel\'s game)').setRequired(false).setAutocomplete(true)
