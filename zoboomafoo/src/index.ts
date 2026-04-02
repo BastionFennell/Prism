@@ -65,3 +65,12 @@ main().catch((err) => {
   console.error('[fatal] Startup failed:', err);
   process.exit(1);
 });
+
+// Keep the process alive through transient network errors — Discord.js will reconnect on its own.
+client.on('error', (err) => {
+  console.error('[discord] Client error (will reconnect):', err.message);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[process] Unhandled rejection:', reason);
+});
