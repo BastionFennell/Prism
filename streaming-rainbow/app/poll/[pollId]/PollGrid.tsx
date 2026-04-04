@@ -259,7 +259,7 @@ export default function PollGrid({ pollData, userId }: { pollData: PollData; use
     const wasSaved = pollData.mySlots.includes(slotKey);
     const effectiveCount = isMine && !wasSaved ? count + 1 : !isMine && wasSaved ? count - 1 : count;
     const bg = slotColor(effectiveCount, totalVoters);
-    const border = isMine ? '2px solid #2563eb' : effectiveCount > 0 ? '1px solid rgba(255,255,255,0.05)' : '1px solid #2e2e31';
+    const border = effectiveCount > 0 ? '1px solid rgba(255,255,255,0.05)' : '1px solid #2e2e31';
     return { bg, border, opacity: 1 };
   }
 
@@ -372,10 +372,6 @@ export default function PollGrid({ pollData, userId }: { pollData: PollData; use
       {/* Legend */}
       {viewMode === 'group' && hasSaved && (
         <div style={{ display: 'flex', gap: 20, marginBottom: 16, fontSize: 12, color: '#71717a', flexWrap: 'wrap' }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ width: 12, height: 12, background: '#15803d', border: '2px solid #2563eb', display: 'inline-block', borderRadius: 3, flexShrink: 0 }} />
-            You + others
-          </span>
           <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ width: 12, height: 12, background: '#15803d', display: 'inline-block', borderRadius: 3, flexShrink: 0 }} />
             All voters available
