@@ -1,0 +1,1 @@
+ALTER TABLE bot_config ADD error_channel_id text;

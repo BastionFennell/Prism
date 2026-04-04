@@ -1,0 +1,1 @@
+ALTER TABLE feedback_threads ADD original_prompt text;

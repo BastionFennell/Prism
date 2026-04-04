@@ -18,7 +18,8 @@
     "discord.js": "^14.25.1",
     "dotenv": "^16.4.7",
     "drizzle-orm": "^0.38.3",
-    "luxon": "^3.5.0"
+    "luxon": "^3.5.0",
+    "openai": "^6.33.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.12",

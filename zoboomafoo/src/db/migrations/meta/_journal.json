@@ -57,6 +57,34 @@
       "when": 1774251600000,
       "tag": "0007_announcement_confirm_channel",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1774252200000,
+      "tag": "0008_error_channel",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1774252800000,
+      "tag": "0009_feedback_threads",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1774253400000,
+      "tag": "0010_feedback_original_prompt",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1774254000000,
+      "tag": "0011_meetings",
+      "breakpoints": true
     }
   ]
 }

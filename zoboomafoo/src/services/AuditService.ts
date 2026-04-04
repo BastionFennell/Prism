@@ -19,6 +19,11 @@ export type AuditAction =
   | 'character.added'
   | 'character.updated'
   | 'character.removed'
+  | 'meeting.created'
+  | 'meeting.updated'
+  | 'meeting.rescheduled'
+  | 'meeting.canceled'
+  | 'meeting.completed'
   | 'repair.rebuild_schedule'
   | 'repair.relink_channel';
 

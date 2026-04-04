@@ -4,6 +4,7 @@ import { db } from '../db';
 import { client } from '../client';
 import { GameService } from '../services/GameService';
 import { SessionService } from '../services/SessionService';
+import { MeetingService } from '../services/MeetingService';
 
 export async function handleAutocomplete(
   interaction: AutocompleteInteraction,
@@ -38,6 +39,19 @@ export async function handleAutocomplete(
         { name: 'Central (CT)',  value: 'America/Chicago' },
         { name: 'Eastern (ET)',  value: 'America/New_York' },
       ]);
+      return;
+    }
+
+    if (focused.name === 'meeting') {
+      const meetingService = new MeetingService(db);
+      const upcoming = meetingService.getUpcomingMeetings().slice(0, 25);
+
+      await interaction.respond(
+        upcoming.map((m) => ({
+          name: `${m.title} — ${m.startAt.toLocaleDateString()}`,
+          value: m.id,
+        }))
+      );
       return;
     }
 

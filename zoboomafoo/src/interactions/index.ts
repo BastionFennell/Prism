@@ -5,21 +5,30 @@ import { handleButtonInteraction } from './buttons';
 import { handleAutocomplete } from './autocomplete';
 import { handleReactionAdd, handleReactionRemove } from './reactions';
 import { handleMention } from './mentions';
-import { handleScheduleAnnouncementContext, handleScheduleAnnouncementModal, handleCancelAnnouncementContext } from './scheduleAnnouncement';
+import { handleScheduleAnnouncementContext, handleScheduleAnnouncementModal, handleCancelAnnouncementContext, handleRescheduleAnnouncementContext, handleRescheduleAnnouncementModal } from './scheduleAnnouncement';
+import { handleGetFeedbackContext, handleFeedbackThreadMessage } from './feedback';
 import type { SchedulingPollService } from '../services/SchedulingPollService';
+import type { MeetingPollService } from '../services/MeetingPollService';
 
 let schedulingPollService: SchedulingPollService | null = null;
+let meetingPollService: MeetingPollService | null = null;
 
 export function setSchedulingPollService(svc: SchedulingPollService): void {
   schedulingPollService = svc;
 }
 
+export function setMeetingPollService(svc: MeetingPollService): void {
+  meetingPollService = svc;
+}
+
 export function registerInteractionHandlers(client: Client): void {
   client.on(Events.MessagePollVoteAdd, (pollAnswer) => {
     schedulingPollService?.handlePollVote(pollAnswer as any).catch(console.error);
+    meetingPollService?.handlePollVote(pollAnswer as any).catch(console.error);
   });
   client.on(Events.MessageCreate, (message) => {
     handleMention(message).catch(console.error);
+    handleFeedbackThreadMessage(message).catch(console.error);
   });
 
   client.on(Events.MessageReactionAdd, (reaction, user) => {
@@ -44,11 +53,17 @@ export function registerInteractionHandlers(client: Client): void {
           await handleScheduleAnnouncementContext(interaction, config);
         } else if (interaction.commandName === 'Cancel Announcement') {
           await handleCancelAnnouncementContext(interaction, config);
+        } else if (interaction.commandName === 'Reschedule Announcement') {
+          await handleRescheduleAnnouncementContext(interaction, config);
+        } else if (interaction.commandName === 'Get Feedback') {
+          await handleGetFeedbackContext(interaction);
         }
 
       } else if (interaction.isModalSubmit()) {
         if (interaction.customId.startsWith('announce-schedule:')) {
           await handleScheduleAnnouncementModal(interaction, config);
+        } else if (interaction.customId.startsWith('announce-reschedule:')) {
+          await handleRescheduleAnnouncementModal(interaction, config);
         }
 
       } else if (interaction.isButton()) {

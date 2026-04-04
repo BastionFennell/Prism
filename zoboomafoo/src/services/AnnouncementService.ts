@@ -1,4 +1,4 @@
-import { Client, TextChannel } from 'discord.js';
+import { Client, TextChannel, NewsChannel } from 'discord.js';
 import { eq, lte, isNull, isNotNull } from 'drizzle-orm';
 import { DB } from '../db';
 import { announcementQueue, AnnouncementQueueEntry } from '../db/schema';
@@ -41,6 +41,37 @@ export class AnnouncementService {
       .set({ confirmMessageId, confirmChannelId })
       .where(eq(announcementQueue.id, id))
       .run();
+  }
+
+  /** Finds an unsent announcement by its confirmation message ID. */
+  findByConfirmMessage(confirmMessageId: string): AnnouncementQueueEntry | null {
+    const entry = this.db
+      .select()
+      .from(announcementQueue)
+      .where(eq(announcementQueue.confirmMessageId, confirmMessageId))
+      .get();
+
+    if (!entry || entry.sentAt) return null;
+    return entry;
+  }
+
+  /** Reschedules an unsent announcement by its confirmation message ID. Returns the updated entry or null if not found/already sent. */
+  reschedule(confirmMessageId: string, newSendAt: Date): AnnouncementQueueEntry | null {
+    const entry = this.db
+      .select()
+      .from(announcementQueue)
+      .where(eq(announcementQueue.confirmMessageId, confirmMessageId))
+      .get();
+
+    if (!entry || entry.sentAt) return null;
+
+    this.db
+      .update(announcementQueue)
+      .set({ sendAt: newSendAt })
+      .where(eq(announcementQueue.id, entry.id))
+      .run();
+
+    return { ...entry, sendAt: newSendAt };
   }
 
   /** Cancels an unsent announcement by its confirmation message ID. Returns the entry or null if not found/already sent. */
@@ -97,8 +128,8 @@ export class AnnouncementService {
   private async send(entry: AnnouncementQueueEntry): Promise<void> {
     try {
       const sourceChannel = await this.client.channels.fetch(entry.sourceChannelId);
-      if (!sourceChannel || !(sourceChannel instanceof TextChannel)) {
-        console.warn(`[AnnouncementService] Source channel ${entry.sourceChannelId} not found or not a text channel.`);
+      if (!sourceChannel || !(sourceChannel instanceof TextChannel || sourceChannel instanceof NewsChannel)) {
+        console.warn(`[AnnouncementService] Source channel ${entry.sourceChannelId} not found or not a text/announcement channel.`);
         this.markFailed(entry.id);
         return;
       }
@@ -106,8 +137,8 @@ export class AnnouncementService {
       const message = await sourceChannel.messages.fetch(entry.messageId);
 
       const targetChannel = await this.client.channels.fetch(entry.targetChannelId);
-      if (!targetChannel || !(targetChannel instanceof TextChannel)) {
-        console.warn(`[AnnouncementService] Target channel ${entry.targetChannelId} not found or not a text channel.`);
+      if (!targetChannel || !(targetChannel instanceof TextChannel || targetChannel instanceof NewsChannel)) {
+        console.warn(`[AnnouncementService] Target channel ${entry.targetChannelId} not found or not a text/announcement channel.`);
         this.markFailed(entry.id);
         return;
       }
@@ -128,7 +159,7 @@ export class AnnouncementService {
       if (entry.confirmMessageId && entry.confirmChannelId) {
         try {
           const confirmChannel = await this.client.channels.fetch(entry.confirmChannelId);
-          if (confirmChannel instanceof TextChannel) {
+          if (confirmChannel instanceof TextChannel || confirmChannel instanceof NewsChannel) {
             const confirmMsg = await confirmChannel.messages.fetch(entry.confirmMessageId);
             await confirmMsg.edit(`📣 Announcement posted. [Jump to message](${sent.url})`);
           }

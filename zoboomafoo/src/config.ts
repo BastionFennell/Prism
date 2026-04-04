@@ -9,6 +9,8 @@ export interface AppConfig {
   gamesCategoryId: string;
   archivedCategoryId: string;
   scheduleChannelId: string;
+  errorChannelId: string;
+  meetingChannelId: string;
   defaultTimezone: string;
 }
 
@@ -38,6 +40,8 @@ export function loadConfig(): AppConfig {
       gamesCategoryId: '',
       archivedCategoryId: '',
       scheduleChannelId: '',
+      errorChannelId: '',
+      meetingChannelId: '',
       defaultTimezone: 'UTC',
     };
   }
@@ -50,6 +54,8 @@ export function loadConfig(): AppConfig {
     gamesCategoryId: row.gamesCategoryId,
     archivedCategoryId: row.archivedCategoryId,
     scheduleChannelId: row.scheduleChannelId,
+    errorChannelId: row.errorChannelId ?? '',
+    meetingChannelId: row.meetingChannelId ?? '',
     defaultTimezone: row.defaultTimezone,
   };
 

@@ -1,7 +1,7 @@
 import { Client, TextChannel, EmbedBuilder, Colors } from 'discord.js';
 import { eq, asc, inArray, and, gt } from 'drizzle-orm';
 import { DB } from '../db';
-import { sessions, games, gameMemberships, schedulePosts, botConfig, rsvps, Session, Game, Rsvp } from '../db/schema';
+import { sessions, games, gameMemberships, schedulePosts, botConfig, rsvps, meetings, Session, Game, Meeting, Rsvp } from '../db/schema';
 import { AppConfig } from '../config';
 import { discordTimestamp } from '../utils/time';
 
@@ -172,6 +172,39 @@ export class ScheduleService {
     }
   }
 
+  // ── Meeting announcement (meeting channel, no reactions) ────────────────
+
+  async postMeetingAnnouncement(meeting: Meeting): Promise<void> {
+    if (!this.config.meetingChannelId) return;
+
+    const channel = await this.client.channels.fetch(this.config.meetingChannelId);
+    if (!channel || !(channel instanceof TextChannel)) return;
+
+    const embed = new EmbedBuilder()
+      .setTitle(`🤝 ${meeting.title}`)
+      .setColor(Colors.DarkGreen)
+      .addFields({
+        name: '🕐 When',
+        value: `${discordTimestamp(meeting.startAt, 'F')}\n${discordTimestamp(meeting.startAt, 'R')}`,
+        inline: true,
+      });
+
+    if (meeting.durationMinutes) {
+      embed.addFields({ name: '⏱ Duration', value: `${meeting.durationMinutes} min`, inline: true });
+    }
+
+    embed.setFooter({ text: `Meeting ID: ${meeting.id}` });
+
+    const roleMention = this.config.founderRoleId ? `<@&${this.config.founderRoleId}>` : '';
+    const msg = await channel.send({ content: roleMention, embeds: [embed] });
+
+    this.db
+      .update(meetings)
+      .set({ announcementMessageId: msg.id, updatedAt: new Date() })
+      .where(eq(meetings.id, meeting.id))
+      .run();
+  }
+
   // ── Embed builders ────────────────────────────────────────────────────────
 
   buildSessionAnnouncementEmbed(session: Session, gameTitle: string, rsvpList: Rsvp[]): EmbedBuilder {
@@ -334,6 +367,32 @@ export class ScheduleService {
       }
 
       embed.addFields({ name: fieldName, value: fieldValue, inline: false });
+      fieldCount++;
+    }
+
+    // Add upcoming meetings section
+    const upcomingMeetings = this.db
+      .select()
+      .from(meetings)
+      .where(and(eq(meetings.status, 'scheduled'), gt(meetings.startAt, now)))
+      .orderBy(asc(meetings.startAt))
+      .all();
+
+    if (upcomingMeetings.length > 0) {
+      const meetingChannel = this.config.meetingChannelId ? ` · <#${this.config.meetingChannelId}>` : '';
+      const meetingFieldName = `🤝 Founder Meetings${meetingChannel}`;
+      const meetingFieldValue = upcomingMeetings
+        .map((m) => `**${m.title}**\n${discordTimestamp(m.startAt, 'F')} · ${discordTimestamp(m.startAt, 'R')}`)
+        .join('\n')
+        .slice(0, 1024);
+
+      if (fieldCount >= 25) {
+        messages.push([embed]);
+        embed = new EmbedBuilder().setTitle('📅 Schedule (cont.)').setColor(Colors.Blurple);
+        fieldCount = 0;
+      }
+
+      embed.addFields({ name: meetingFieldName, value: meetingFieldValue, inline: false });
       fieldCount++;
     }
 

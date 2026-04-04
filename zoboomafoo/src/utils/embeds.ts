@@ -1,5 +1,5 @@
 import { EmbedBuilder, Colors } from 'discord.js';
-import { Game, Session } from '../db/schema';
+import { Game, Session, Meeting } from '../db/schema';
 import { discordTimestamp } from './time';
 
 export function gameInfoEmbed(
@@ -72,6 +72,26 @@ export function sessionEmbed(session: Session, gameTitle: string): EmbedBuilder 
     .setColor(Colors.Green)
     .addFields(fields)
     .setFooter({ text: `Session ID: ${session.id}` });
+}
+
+export function meetingEmbed(meeting: Meeting): EmbedBuilder {
+  const fields = [
+    {
+      name: 'Date & Time',
+      value: `${discordTimestamp(meeting.startAt, 'F')}\n${discordTimestamp(meeting.startAt, 'R')}`,
+      inline: true,
+    },
+  ];
+
+  if (meeting.durationMinutes) {
+    fields.push({ name: 'Duration', value: `${meeting.durationMinutes} min`, inline: true });
+  }
+
+  return new EmbedBuilder()
+    .setTitle(`🤝 ${meeting.title}`)
+    .setColor(Colors.DarkGreen)
+    .addFields(fields)
+    .setFooter({ text: `Meeting ID: ${meeting.id}` });
 }
 
 export function confirmEmbed(title: string, description: string): EmbedBuilder {

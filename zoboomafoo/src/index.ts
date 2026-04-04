@@ -2,9 +2,11 @@ import 'dotenv/config';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import path from 'path';
 import { db } from './db';
+import { Events } from 'discord.js';
 import { client } from './client';
 import { loadConfig } from './config';
-import { registerInteractionHandlers, setSchedulingPollService } from './interactions';
+import { registerInteractionHandlers, setSchedulingPollService, setMeetingPollService } from './interactions';
+import { initErrorReporter } from './utils/errorReporter';
 
 async function main() {
   // 1. Run pending migrations
@@ -21,8 +23,9 @@ async function main() {
   registerInteractionHandlers(client);
 
   // 4. On ready
-  client.once('ready', async (readyClient) => {
+  client.once(Events.ClientReady, async (readyClient) => {
     console.log(`[startup] Logged in as ${readyClient.user.tag}`);
+    initErrorReporter(readyClient);
 
     if (!config.guildId) {
       console.warn('[startup] WARNING: Bot is not configured. Use /admin setup to configure.');
@@ -52,6 +55,12 @@ async function main() {
     const schedulingPollSvc = new SchedulingPollService(db, readyClient, config);
     setSchedulingPollService(schedulingPollSvc);
     schedulingPollSvc.start();
+
+    // 9. Start meeting poll polling
+    const { MeetingPollService } = await import('./services/MeetingPollService');
+    const meetingPollSvc = new MeetingPollService(db, readyClient, config);
+    setMeetingPollService(meetingPollSvc);
+    meetingPollSvc.start();
 
     console.log('[startup] Startup complete.');
   });

@@ -25,6 +25,12 @@ export const setupSubcommand = new SlashCommandSubcommandBuilder()
   .addChannelOption((o) =>
     o.setName('schedule_channel').setDescription('Global schedule channel').setRequired(false)
   )
+  .addChannelOption((o) =>
+    o.setName('error_channel').setDescription('Channel for error/warning reports').setRequired(false)
+  )
+  .addChannelOption((o) =>
+    o.setName('meeting_channel').setDescription('Channel for founder meeting scheduling').setRequired(false)
+  )
   .addStringOption((o) =>
     o.setName('timezone').setDescription('Default timezone (IANA, e.g. America/New_York)').setRequired(false)
   );
@@ -41,6 +47,8 @@ export async function handleSetup(
     const gamesCategory     = interaction.options.getChannel('games_category') ?? undefined;
     const archivedCategory  = interaction.options.getChannel('archived_category') ?? undefined;
     const scheduleChannel   = interaction.options.getChannel('schedule_channel') ?? undefined;
+    const errorChannel      = interaction.options.getChannel('error_channel') ?? undefined;
+    const meetingChannel    = interaction.options.getChannel('meeting_channel') ?? undefined;
     const timezone          = interaction.options.getString('timezone') ?? undefined;
 
     if (timezone && !isValidTimezone(timezone)) {
@@ -71,6 +79,8 @@ export async function handleSetup(
         archivedCategoryId: archivedCategory.id,
         scheduleChannelId: scheduleChannel.id,
         defaultTimezone: timezone ?? 'UTC',
+        ...(errorChannel && { errorChannelId: errorChannel.id }),
+        ...(meetingChannel && { meetingChannelId: meetingChannel.id }),
       }).run();
     } else {
       db.update(botConfig).set({
@@ -79,6 +89,8 @@ export async function handleSetup(
         ...(gamesCategory    && { gamesCategoryId: gamesCategory.id }),
         ...(archivedCategory && { archivedCategoryId: archivedCategory.id }),
         ...(scheduleChannel  && { scheduleChannelId: scheduleChannel.id }),
+        ...(errorChannel     && { errorChannelId: errorChannel.id }),
+        ...(meetingChannel   && { meetingChannelId: meetingChannel.id }),
         ...(timezone         && { defaultTimezone: timezone }),
       }).where(eq(botConfig.id, 1)).run();
     }

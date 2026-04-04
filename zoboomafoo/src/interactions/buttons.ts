@@ -5,6 +5,7 @@ import { client } from '../client';
 import { GameService } from '../services/GameService';
 import { ScheduleService } from '../services/ScheduleService';
 import { SchedulingPollService } from '../services/SchedulingPollService';
+import { MeetingPollService } from '../services/MeetingPollService';
 import { AuditService } from '../services/AuditService';
 import { isFounder } from '../permissions';
 
@@ -60,6 +61,12 @@ export async function handleButtonInteraction(
         const localPollId = parseInt(rest[0]);
         const winningLabel = rest.slice(1).join(':');
         await handleScheduleConfirm(interaction, localPollId, winningLabel, config);
+        break;
+      }
+      case 'meeting-schedule': {
+        const localPollId = parseInt(rest[0]);
+        const winningLabel = rest.slice(1).join(':');
+        await handleMeetingScheduleConfirm(interaction, localPollId, winningLabel, config);
         break;
       }
       default:
@@ -200,6 +207,25 @@ async function handleScheduleConfirm(
   await pollService.confirmAndSchedule(localPollId, winningLabel, interaction.user.id);
 
   await interaction.editReply({ content: `✅ Session scheduled for **${winningLabel}**! Check the channel for the announcement.` });
+}
+
+async function handleMeetingScheduleConfirm(
+  interaction: ButtonInteraction,
+  localPollId: number,
+  winningLabel: string,
+  config: AppConfig
+): Promise<void> {
+  if (!isFounder(interaction.member!, config)) {
+    await interaction.reply({ content: '❌ Only Founders can schedule meetings.', flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  await interaction.update({ content: '⏳ Scheduling meeting...', components: [] });
+
+  const pollService = new MeetingPollService(db, client, config);
+  await pollService.confirmAndSchedule(localPollId, winningLabel, interaction.user.id);
+
+  await interaction.editReply({ content: `✅ Meeting scheduled for **${winningLabel}**! Check the meeting channel for the announcement.` });
 }
 
 async function handleDeleteGameConfirm(

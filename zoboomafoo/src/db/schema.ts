@@ -11,6 +11,8 @@ export const botConfig = sqliteTable('bot_config', {
   scheduleChannelId:  text('schedule_channel_id').notNull(),  // global Founders schedule channel
   defaultTimezone:    text('default_timezone').notNull().default('UTC'),
   rosterMessageId:    text('roster_message_id'),              // persistent games roster embed
+  errorChannelId:     text('error_channel_id'),               // channel for error/warning reports
+  meetingChannelId:   text('meeting_channel_id'),             // channel for founder meeting scheduling
 });
 
 // ── Game ──────────────────────────────────────────────────────────────────────
@@ -142,6 +144,47 @@ export const reactionBannedChannels = sqliteTable('reaction_banned_channels', {
   channelId: text('channel_id').primaryKey(),
 });
 
+// ── FeedbackThread ───────────────────────────────────────────────────────────
+// Tracks threads created by /feedback or "Get Feedback" for follow-up conversation.
+export const feedbackThreads = sqliteTable('feedback_threads', {
+  threadId:       text('thread_id').primaryKey(),          // Discord thread ID
+  imageUrl:       text('image_url'),                       // original image for context
+  originalPrompt: text('original_prompt'),                 // original text prompt for context
+  createdAt:      integer('created_at', { mode: 'timestamp' }).notNull(),
+});
+
+// ── Meeting ──────────────────────────────────────────────────────────────────
+// status: 'scheduled' | 'canceled' | 'completed'
+export const meetings = sqliteTable('meetings', {
+  id:                    integer('id').primaryKey({ autoIncrement: true }),
+  title:                 text('title').notNull(),
+  startAt:               integer('start_at', { mode: 'timestamp' }).notNull(),
+  durationMinutes:       integer('duration_minutes'),
+  timezone:              text('timezone').notNull(),
+  status:                text('status').notNull().default('scheduled'),
+  createdByUserId:       text('created_by_user_id').notNull(),
+  createdAt:             integer('created_at', { mode: 'timestamp' }).notNull(),
+  updatedAt:             integer('updated_at', { mode: 'timestamp' }).notNull(),
+  reminder24hSentAt:     integer('reminder_24h_sent_at', { mode: 'timestamp' }),
+  reminder30mSentAt:     integer('reminder_30m_sent_at', { mode: 'timestamp' }),
+  announcementMessageId: text('announcement_message_id'),
+});
+
+// ── MeetingPoll ──────────────────────────────────────────────────────────────
+// status: 'collecting' | 'voting' | 'confirming' | 'completed' | 'expired'
+export const meetingPolls = sqliteTable('meeting_polls', {
+  id:                    integer('id').primaryKey({ autoIncrement: true }),
+  remotePollId:          text('remote_poll_id').notNull(),
+  discordEmbedMessageId: text('discord_embed_message_id'),
+  discordPollMessageId:  text('discord_poll_message_id'),
+  status:                text('status').notNull().default('collecting'),
+  expiresAt:             integer('expires_at').notNull(),
+  createdByUserId:       text('created_by_user_id').notNull(),
+  scheduledMeetingId:    integer('scheduled_meeting_id').references(() => meetings.id),
+  lastTopSlotsHash:      text('last_top_slots_hash'),
+  createdAt:             integer('created_at').notNull().$defaultFn(() => Date.now()),
+});
+
 // ── Inferred types ────────────────────────────────────────────────────────────
 export type BotConfig = typeof botConfig.$inferSelect;
 export type Game = typeof games.$inferSelect;
@@ -155,7 +198,10 @@ export type AuditLog = typeof auditLogs.$inferSelect;
 export type SchedulePost = typeof schedulePosts.$inferSelect;
 export type AnnouncementQueueEntry = typeof announcementQueue.$inferSelect;
 export type SchedulingPoll = typeof schedulingPolls.$inferSelect;
+export type Meeting = typeof meetings.$inferSelect;
+export type MeetingPoll = typeof meetingPolls.$inferSelect;
 
 export type GameStatus = 'active' | 'paused' | 'archived' | 'finished';
 export type SessionStatus = 'scheduled' | 'canceled' | 'completed';
+export type MeetingStatus = 'scheduled' | 'canceled' | 'completed';
 export type RsvpResponse = 'yes' | 'no' | 'maybe';

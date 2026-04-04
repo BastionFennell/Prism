@@ -1,7 +1,7 @@
 import { Client, TextChannel } from 'discord.js';
 import { eq, and, gt } from 'drizzle-orm';
 import { DB } from '../db';
-import { sessions, games } from '../db/schema';
+import { sessions, games, meetings } from '../db/schema';
 import { loadConfig } from '../config';
 import { discordTimestamp } from '../utils/time';
 
@@ -55,6 +55,32 @@ const MESSAGES_30M = [
     `🧭 FINAL CALL!! **${title}** is happening in 30 minutes — ${time}!!\nGet your character sheet. Get your vibes. Get IN HERE!! 🎲🌟 ${role}`,
 ];
 
+const MEETING_MESSAGES_24H = [
+  (title: string, time: string, role: string) =>
+    `🦎 ZABOOOO! **${title}** is TOMORROW! ${time}\nTime to get your thinking caps on, team!! ${role}`,
+  (title: string, time: string, role: string) =>
+    `📣 ONE DAY until **${title}**! ${time}\nZoboomafoo has already prepared the agenda... wait, that's your job. 📋 ${role}`,
+  (title: string, time: string, role: string) =>
+    `🌟 TOMORROW IS **${title}** DAY!! ${time}\nBring your ideas, bring your updates, bring your best selves!! ${role}`,
+  (title: string, time: string, role: string) =>
+    `🐾 *sniffs the air* ...Zoboomafoo smells a MEETING happening tomorrow!! **${title}** — ${time}\nDon't forget!! ${role}`,
+  (title: string, time: string, role: string) =>
+    `🎯 HEADS UP FOUNDERS! **${title}** is tomorrow — ${time}!\nZoboomafoo believes in this team!! 🦎✨ ${role}`,
+];
+
+const MEETING_MESSAGES_30M = [
+  (title: string, time: string, role: string) =>
+    `🚨 THIRTY MINUTES until **${title}**!! ${time}\nWrap up what you're doing and GET IN HERE!! 🦎🎉 ${role}`,
+  (title: string, time: string, role: string) =>
+    `⏰ HALF AN HOUR! **${title}** starts at ${time}!\nZoboomafoo is already in the meeting room waiting!! 🪑 ${role}`,
+  (title: string, time: string, role: string) =>
+    `🔥 30 MINUTES TO GO!! **${title}** at ${time}!!\nFounders assemble!! 🦎💪 ${role}`,
+  (title: string, time: string, role: string) =>
+    `🐾 *leaps into the room* IT'S ALMOST TIME!! 30 minutes until **${title}**!! ${time}!!\nLet's GOOOO team!! 🌟 ${role}`,
+  (title: string, time: string, role: string) =>
+    `📋 FINAL CALL!! **${title}** in 30 minutes — ${time}!!\nZoboomafoo has your seat saved!! 🦎✨ ${role}`,
+];
+
 function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
@@ -105,6 +131,23 @@ export class ReminderService {
         await this.sendReminder(session.id, game, '24h');
       }
     }
+
+    // Check upcoming meetings
+    const upcomingMeetings = this.db
+      .select()
+      .from(meetings)
+      .where(and(eq(meetings.status, 'scheduled'), gt(meetings.startAt, now)))
+      .all();
+
+    for (const meeting of upcomingMeetings) {
+      const msUntil = meeting.startAt.getTime() - now.getTime();
+
+      if (msUntil <= M30 && !meeting.reminder30mSentAt) {
+        await this.sendMeetingReminder(meeting.id, '30m');
+      } else if (msUntil <= H24 && !meeting.reminder24hSentAt) {
+        await this.sendMeetingReminder(meeting.id, '24h');
+      }
+    }
   }
 
   private async sendReminder(
@@ -142,6 +185,44 @@ export class ReminderService {
       console.log(`[ReminderService] Sent ${timeframe} reminder for session ${sessionId} (${game.title})`);
     } catch (err) {
       console.warn(`[ReminderService] Failed to send reminder for session ${sessionId}:`, err);
+    }
+  }
+
+  private async sendMeetingReminder(
+    meetingId: number,
+    timeframe: '24h' | '30m'
+  ): Promise<void> {
+    const config = loadConfig();
+    if (!config.meetingChannelId) return;
+
+    try {
+      const channel = await this.client.channels.fetch(config.meetingChannelId);
+      if (!channel || !(channel instanceof TextChannel)) {
+        console.warn(`[ReminderService] Meeting channel ${config.meetingChannelId} not found`);
+        return;
+      }
+
+      const [meeting] = this.db.select().from(meetings).where(eq(meetings.id, meetingId)).all();
+      if (!meeting) return;
+
+      const role = config.founderRoleId ? `<@&${config.founderRoleId}>` : '';
+      const time = `${discordTimestamp(meeting.startAt, 'F')} (${discordTimestamp(meeting.startAt, 'R')})`;
+
+      const template = timeframe === '24h' ? pick(MEETING_MESSAGES_24H) : pick(MEETING_MESSAGES_30M);
+      const content = template(meeting.title, time, role);
+
+      await channel.send(content);
+
+      const now = new Date();
+      if (timeframe === '24h') {
+        this.db.update(meetings).set({ reminder24hSentAt: now }).where(eq(meetings.id, meetingId)).run();
+      } else {
+        this.db.update(meetings).set({ reminder30mSentAt: now }).where(eq(meetings.id, meetingId)).run();
+      }
+
+      console.log(`[ReminderService] Sent ${timeframe} reminder for meeting ${meetingId} (${meeting.title})`);
+    } catch (err) {
+      console.warn(`[ReminderService] Failed to send reminder for meeting ${meetingId}:`, err);
     }
   }
 }
