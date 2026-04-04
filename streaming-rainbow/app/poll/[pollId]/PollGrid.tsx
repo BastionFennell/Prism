@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 
 interface PollData {
@@ -25,6 +25,7 @@ const HEADER_H = 52;
 const HOUR_GAP = 6;
 const HALF_GAP = 2;
 const TIME_W = 60;
+const TOUCH_MOVE_THRESHOLD = 10; // px — beyond this, it's a scroll in scroll mode
 
 function parseTime(t: string): number {
   const [h, m] = t.split(':').map(Number);
@@ -43,11 +44,9 @@ function dateToLocalStr(date: Date): string {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
 }
 
-/** Green heat map: darker = higher ratio of current voters available */
 function slotColor(count: number, totalVoters: number): string {
   if (totalVoters === 0 || count === 0) return '#1e1e20';
   const ratio = count / totalVoters;
-  // Interpolate from light (#1a3a2a) to bright (#15803d)
   if (ratio >= 1.0) return '#15803d';
   if (ratio >= 0.75) return '#166534';
   if (ratio >= 0.5) return '#1a5c34';
@@ -55,7 +54,6 @@ function slotColor(count: number, totalVoters: number): string {
   return '#1a3a2a';
 }
 
-/** Blue for "just your selection" before saving */
 function mySlotColor(selected: boolean): string {
   return selected ? '#2563eb' : '#1e1e20';
 }
@@ -90,7 +88,13 @@ function tzAbbr(tz: string): string {
   return parts.find(p => p.type === 'timeZoneName')?.value ?? tz;
 }
 
+function getSlotFromPoint(x: number, y: number): string | null {
+  const el = document.elementFromPoint(x, y);
+  return el?.getAttribute('data-slot') ?? null;
+}
+
 type ViewMode = 'mine' | 'group';
+type TouchMode = 'select' | 'scroll';
 
 export default function PollGrid({ pollData, userId }: { pollData: PollData; userId: string }) {
   const router = useRouter();
@@ -105,9 +109,24 @@ export default function PollGrid({ pollData, userId }: { pollData: PollData; use
   const dragMode = useRef<'add' | 'remove'>('add');
   const isClosed = pollData.status !== 'collecting';
 
-  // Only show group view if user has already submitted availability
   const hasSaved = pollData.mySlots.length > 0;
   const [viewMode, setViewMode] = useState<ViewMode>(hasSaved ? 'group' : 'mine');
+
+  // Touch mode state
+  const [touchMode, setTouchMode] = useState<TouchMode>('select');
+  const [isTouchDevice, setIsTouchDevice] = useState(false);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Touch tracking refs
+  const touchStartPos = useRef<{ x: number; y: number } | null>(null);
+  const touchStartSlot = useRef<string | null>(null);
+  const touchMoved = useRef(false);
+  const lastTouchSlot = useRef<string | null>(null);
+  const twoFingerScrollStart = useRef<{ x: number; scrollLeft: number } | null>(null);
+
+  useEffect(() => {
+    setIsTouchDevice('ontouchstart' in window || navigator.maxTouchPoints > 0);
+  }, []);
 
   const userTimezone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, []);
 
@@ -149,9 +168,7 @@ export default function PollGrid({ pollData, userId }: { pollData: PollData; use
     return map;
   }, [pollData.voters]);
 
-  // Number of voters who have submitted (for heat map denominator)
   const totalVoters = pollData.voters.length;
-
   const firstDay = days[0] ?? '2000-01-01';
   const windowStartMin = parseTime(pollData.dailyWindowStart);
   const windowEndMin = parseTime(pollData.dailyWindowEnd);
@@ -185,11 +202,26 @@ export default function PollGrid({ pollData, userId }: { pollData: PollData; use
     return `${pollLabel} ${tzAbbr(pollData.timezone)} · ${userLabel} ${tzAbbr(userTimezone)} — ${count}/${totalVoters} available`;
   }
 
-  const toggleSlot = (slotKey: string) => {
+  // ── Slot manipulation ──────────────────────────────────────────────────
+
+  const applySlot = useCallback((slotKey: string, mode: 'add' | 'remove') => {
+    if (isClosed) return;
+    setMySlots(prev => {
+      const n = new Set(prev);
+      mode === 'add' ? n.add(slotKey) : n.delete(slotKey);
+      return n;
+    });
+    setSaved(false);
+  }, [isClosed]);
+
+  const toggleSlot = useCallback((slotKey: string) => {
     if (isClosed) return;
     setMySlots(prev => { const n = new Set(prev); n.has(slotKey) ? n.delete(slotKey) : n.add(slotKey); return n; });
     setSaved(false);
-  };
+  }, [isClosed]);
+
+  // ── Mouse handlers (desktop only) ─────────────────────────────────────
+
   const handleMouseDown = (slotKey: string) => {
     if (isClosed) return;
     isDragging.current = true;
@@ -198,15 +230,104 @@ export default function PollGrid({ pollData, userId }: { pollData: PollData; use
   };
   const handleMouseEnter = (slotKey: string) => {
     if (!isDragging.current || isClosed) return;
-    setMySlots(prev => { const n = new Set(prev); dragMode.current === 'add' ? n.add(slotKey) : n.delete(slotKey); return n; });
-    setSaved(false);
+    applySlot(slotKey, dragMode.current);
   };
+
   useEffect(() => {
     const stop = () => { isDragging.current = false; };
     window.addEventListener('mouseup', stop);
-    window.addEventListener('touchend', stop);
-    return () => { window.removeEventListener('mouseup', stop); window.removeEventListener('touchend', stop); };
+    return () => { window.removeEventListener('mouseup', stop); };
   }, []);
+
+  // ── Touch handlers ────────────────────────────────────────────────────
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (isClosed) return;
+
+    if (touchMode === 'select') {
+      if (e.touches.length === 2) {
+        // Two-finger: start manual scroll
+        const container = scrollContainerRef.current;
+        if (container) {
+          const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+          twoFingerScrollStart.current = { x: midX, scrollLeft: container.scrollLeft };
+        }
+        isDragging.current = false;
+        return;
+      }
+
+      // Single finger in select mode: start drag-select
+      const touch = e.touches[0];
+      const slot = getSlotFromPoint(touch.clientX, touch.clientY);
+      if (!slot) return;
+
+      e.preventDefault(); // Prevent scroll in select mode
+      isDragging.current = true;
+      dragMode.current = mySlots.has(slot) ? 'remove' : 'add';
+      lastTouchSlot.current = slot;
+      toggleSlot(slot);
+    } else {
+      // Scroll mode: record start position, don't toggle yet
+      const touch = e.touches[0];
+      touchStartPos.current = { x: touch.clientX, y: touch.clientY };
+      touchStartSlot.current = getSlotFromPoint(touch.clientX, touch.clientY);
+      touchMoved.current = false;
+    }
+  }, [isClosed, touchMode, mySlots, toggleSlot]);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (isClosed) return;
+
+    if (touchMode === 'select') {
+      if (e.touches.length === 2) {
+        // Two-finger scroll
+        const container = scrollContainerRef.current;
+        const start = twoFingerScrollStart.current;
+        if (container && start) {
+          const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+          container.scrollLeft = start.scrollLeft - (midX - start.x);
+        }
+        return;
+      }
+
+      if (!isDragging.current) return;
+      e.preventDefault();
+
+      const touch = e.touches[0];
+      const slot = getSlotFromPoint(touch.clientX, touch.clientY);
+      if (slot && slot !== lastTouchSlot.current) {
+        lastTouchSlot.current = slot;
+        applySlot(slot, dragMode.current);
+      }
+    } else {
+      // Scroll mode: check if finger moved enough to be a scroll
+      if (!touchStartPos.current) return;
+      const touch = e.touches[0];
+      const dx = Math.abs(touch.clientX - touchStartPos.current.x);
+      const dy = Math.abs(touch.clientY - touchStartPos.current.y);
+      if (dx > TOUCH_MOVE_THRESHOLD || dy > TOUCH_MOVE_THRESHOLD) {
+        touchMoved.current = true;
+      }
+    }
+  }, [isClosed, touchMode, applySlot]);
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (touchMode === 'select') {
+      isDragging.current = false;
+      lastTouchSlot.current = null;
+      twoFingerScrollStart.current = null;
+    } else {
+      // Scroll mode: if finger didn't move, it's a tap → toggle
+      if (!touchMoved.current && touchStartSlot.current) {
+        toggleSlot(touchStartSlot.current);
+      }
+      touchStartPos.current = null;
+      touchStartSlot.current = null;
+      touchMoved.current = false;
+    }
+  }, [touchMode, toggleSlot]);
+
+  // ── Save ──────────────────────────────────────────────────────────────
 
   const handleSave = async () => {
     setSaving(true);
@@ -220,7 +341,8 @@ export default function PollGrid({ pollData, userId }: { pollData: PollData; use
     } finally { setSaving(false); }
   };
 
-  // Voters available for the currently hovered slot
+  // ── Derived state ─────────────────────────────────────────────────────
+
   const hoveredSlotVoters = useMemo(() => {
     if (!hoveredSlot) return null;
     const available = new Set<string>();
@@ -235,7 +357,6 @@ export default function PollGrid({ pollData, userId }: { pollData: PollData; use
     return { available, unavailable };
   }, [hoveredSlot, pollData.voters, voterSlotSets]);
 
-  // Determine cell color based on view mode
   function getCellStyle(slotKey: string, isMine: boolean): { bg: string; border: string; opacity: number } {
     const count = slotCounts[slotKey] ?? 0;
 
@@ -255,13 +376,14 @@ export default function PollGrid({ pollData, userId }: { pollData: PollData; use
       };
     }
 
-    // Group view: green heat map based on ratio of current voters
     const wasSaved = pollData.mySlots.includes(slotKey);
     const effectiveCount = isMine && !wasSaved ? count + 1 : !isMine && wasSaved ? count - 1 : count;
     const bg = slotColor(effectiveCount, totalVoters);
     const border = effectiveCount > 0 ? '1px solid rgba(255,255,255,0.05)' : '1px solid #2e2e31';
     return { bg, border, opacity: 1 };
   }
+
+  // ── Render ────────────────────────────────────────────────────────────
 
   return (
     <div style={{ fontFamily: 'system-ui, sans-serif', maxWidth: '100%' }}>
@@ -272,7 +394,7 @@ export default function PollGrid({ pollData, userId }: { pollData: PollData; use
         .poll-slot.closed:hover { filter: none; }
       `}</style>
 
-      {/* Toolbar: voters + controls */}
+      {/* Toolbar */}
       <div style={{ marginBottom: 14, display: 'flex', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap', justifyContent: 'space-between' }}>
         <div style={{ fontSize: 13, color: '#71717a', lineHeight: 1.6 }}>
           <span style={{ color: '#a1a1aa' }}>{pollData.voters.length}</span>
@@ -329,7 +451,26 @@ export default function PollGrid({ pollData, userId }: { pollData: PollData; use
             </span>
           )}
         </div>
-        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+        <div style={{ display: 'flex', gap: 4, flexShrink: 0, flexWrap: 'wrap' }}>
+          {/* Touch mode toggle (mobile only) */}
+          {isTouchDevice && !isClosed && (
+            <div style={{ display: 'flex', background: '#27272a', borderRadius: 6, padding: 2, gap: 2, marginRight: 8 }}>
+              {([['select', '✏️ Select'], ['scroll', '↔️ Scroll']] as const).map(([mode, label]) => (
+                <button
+                  key={mode}
+                  onClick={() => setTouchMode(mode)}
+                  style={{
+                    background: touchMode === mode ? '#3f3f46' : 'transparent',
+                    color: touchMode === mode ? '#f4f4f5' : '#71717a',
+                    border: 'none', borderRadius: 4, padding: '4px 10px',
+                    fontSize: 12, cursor: 'pointer', transition: 'all 0.15s', whiteSpace: 'nowrap',
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
           {/* View mode toggle */}
           {hasSaved && (
             <div style={{ display: 'flex', background: '#27272a', borderRadius: 6, padding: 2, gap: 2, marginRight: 8 }}>
@@ -389,8 +530,16 @@ export default function PollGrid({ pollData, userId }: { pollData: PollData; use
 
       {/* Grid */}
       <div
-        style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}
+        ref={scrollContainerRef}
+        style={{
+          overflowX: 'auto',
+          WebkitOverflowScrolling: touchMode === 'scroll' ? 'touch' : undefined,
+          touchAction: touchMode === 'select' ? 'none' : 'pan-x pan-y',
+        }}
         onMouseLeave={() => setHoveredSlot(null)}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
       >
         <div style={{
           display: 'flex',
@@ -463,7 +612,6 @@ export default function PollGrid({ pollData, userId }: { pollData: PollData; use
 
                   const { bg, border, opacity } = getCellStyle(slotKey, isMine);
 
-                  // Tooltip with voter names
                   const count = slotCounts[slotKey] ?? 0;
                   const availableVoters = pollData.voters
                     .filter(v => voterSlotSets[v.discordUserId]?.has(slotKey))
@@ -476,6 +624,7 @@ export default function PollGrid({ pollData, userId }: { pollData: PollData; use
                   return (
                     <div
                       key={slotKey}
+                      data-slot={slotKey}
                       className={`poll-slot${isClosed ? ' closed' : ''}`}
                       style={{
                         height: CELL_H,
@@ -491,7 +640,6 @@ export default function PollGrid({ pollData, userId }: { pollData: PollData; use
                       onMouseDown={() => handleMouseDown(slotKey)}
                       onMouseEnter={() => { handleMouseEnter(slotKey); setHoveredSlot(slotKey); }}
                       onMouseLeave={() => setHoveredSlot(null)}
-                      onTouchStart={() => handleMouseDown(slotKey)}
                     />
                   );
                 })}

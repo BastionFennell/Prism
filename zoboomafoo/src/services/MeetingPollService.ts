@@ -216,7 +216,16 @@ export class MeetingPollService {
       const channel = await this.client.channels.fetch(config.meetingChannelId);
       if (!channel || !(channel instanceof TextChannel)) return;
 
-      const msg = await channel.messages.fetch(poll.discordPollMessageId);
+      let msg;
+      try {
+        msg = await channel.messages.fetch(poll.discordPollMessageId);
+      } catch {
+        // Message was deleted — expire the poll
+        console.warn(`[MeetingPollService] Poll message ${poll.discordPollMessageId} not found, expiring poll ${poll.id}`);
+        this.db.update(meetingPolls).set({ status: 'expired' }).where(eq(meetingPolls.id, poll.id)).run();
+        await this.cleanupRemotePoll(poll.remotePollId);
+        return;
+      }
       if (!msg.poll) return;
 
       const isFinalized = (msg.poll as any).resultsFinalized ?? false;

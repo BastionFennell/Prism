@@ -221,7 +221,15 @@ export class SchedulingPollService {
       const channel = await this.client.channels.fetch(game.discordChannelId);
       if (!channel || !(channel instanceof TextChannel)) return;
 
-      const msg = await channel.messages.fetch(poll.discordPollMessageId);
+      let msg;
+      try {
+        msg = await channel.messages.fetch(poll.discordPollMessageId);
+      } catch {
+        console.warn(`[SchedulingPollService] Poll message ${poll.discordPollMessageId} not found, expiring poll ${poll.id}`);
+        this.db.update(schedulingPolls).set({ status: 'expired' }).where(eq(schedulingPolls.id, poll.id)).run();
+        await this.cleanupRemotePoll(poll.remotePollId);
+        return;
+      }
       if (!msg.poll) return;
 
       // Check if poll is finalized
