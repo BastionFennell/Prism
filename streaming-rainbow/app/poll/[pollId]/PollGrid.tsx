@@ -20,11 +20,11 @@ interface PollData {
   slotCounts: Record<string, number>;
 }
 
-const CELL_H = 32;        // px — cell height
-const HEADER_H = 52;      // px — day header height
-const HOUR_GAP = 6;       // px — extra top gap before each :00 row
-const HALF_GAP = 2;       // px — gap between :30 and next :00
-const TIME_W = 60;        // px — width of the time-label column
+const CELL_H = 32;
+const HEADER_H = 52;
+const HOUR_GAP = 6;
+const HALF_GAP = 2;
+const TIME_W = 60;
 
 function parseTime(t: string): number {
   const [h, m] = t.split(':').map(Number);
@@ -42,26 +42,31 @@ function formatTimeDisplay(timeStr: string): string {
 function dateToLocalStr(date: Date): string {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
 }
-function slotColor(count: number, total: number): string {
-  if (total === 0 || count === 0) return '#1e1e20';
-  const ratio = count / total;
-  if (ratio >= 1.0) return '#16a34a';
-  if (ratio >= 0.75) return '#22c55e';
-  if (ratio >= 0.5) return '#4ade80';
-  if (ratio >= 0.25) return '#86efac';
-  return '#bbf7d0';
+
+/** Green heat map: darker = higher ratio of current voters available */
+function slotColor(count: number, totalVoters: number): string {
+  if (totalVoters === 0 || count === 0) return '#1e1e20';
+  const ratio = count / totalVoters;
+  // Interpolate from light (#1a3a2a) to bright (#15803d)
+  if (ratio >= 1.0) return '#15803d';
+  if (ratio >= 0.75) return '#166534';
+  if (ratio >= 0.5) return '#1a5c34';
+  if (ratio >= 0.25) return '#1e4d35';
+  return '#1a3a2a';
 }
 
-// sv-SE locale reliably produces "YYYY-MM-DD HH:MM" — no formatToParts edge cases.
+/** Blue for "just your selection" before saving */
+function mySlotColor(selected: boolean): string {
+  return selected ? '#2563eb' : '#1e1e20';
+}
+
 function slotToUTC(slotStr: string, pollTimezone: string): Date {
-  // Treat the slot string as UTC to get an approximate timestamp, then compute
-  // the real UTC time by measuring the poll-timezone offset at that moment.
   const guessMs = new Date(`${slotStr}:00.000Z`).getTime();
   const localStr = new Intl.DateTimeFormat('sv-SE', {
     timeZone: pollTimezone,
     year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit', hour12: false,
-  }).format(new Date(guessMs)); // → "2026-03-24 09:30"
+  }).format(new Date(guessMs));
   const localMs = new Date(localStr.replace(' ', 'T') + ':00.000Z').getTime();
   return new Date(guessMs + (guessMs - localMs));
 }
@@ -85,6 +90,8 @@ function tzAbbr(tz: string): string {
   return parts.find(p => p.type === 'timeZoneName')?.value ?? tz;
 }
 
+type ViewMode = 'mine' | 'group';
+
 export default function PollGrid({ pollData, userId }: { pollData: PollData; userId: string }) {
   const router = useRouter();
   const [mySlots, setMySlots] = useState<Set<string>>(new Set(pollData.mySlots));
@@ -93,9 +100,14 @@ export default function PollGrid({ pollData, userId }: { pollData: PollData; use
   const [slotCounts] = useState(pollData.slotCounts);
   const [showUserTZ, setShowUserTZ] = useState(false);
   const [hoveredVoter, setHoveredVoter] = useState<string | null>(null);
+  const [hoveredSlot, setHoveredSlot] = useState<string | null>(null);
   const isDragging = useRef(false);
   const dragMode = useRef<'add' | 'remove'>('add');
   const isClosed = pollData.status !== 'collecting';
+
+  // Only show group view if user has already submitted availability
+  const hasSaved = pollData.mySlots.length > 0;
+  const [viewMode, setViewMode] = useState<ViewMode>(hasSaved ? 'group' : 'mine');
 
   const userTimezone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, []);
 
@@ -113,7 +125,6 @@ export default function PollGrid({ pollData, userId }: { pollData: PollData; use
     }
   }, [pollData.timezone, pollData.dateRangeStart, userTimezone]);
 
-  // Build day + time arrays
   const days = useMemo(() => {
     const result: string[] = [];
     const s = new Date(pollData.dateRangeStart); s.setUTCHours(0, 0, 0, 0);
@@ -137,6 +148,9 @@ export default function PollGrid({ pollData, userId }: { pollData: PollData; use
     }
     return map;
   }, [pollData.voters]);
+
+  // Number of voters who have submitted (for heat map denominator)
+  const totalVoters = pollData.voters.length;
 
   const firstDay = days[0] ?? '2000-01-01';
   const windowStartMin = parseTime(pollData.dailyWindowStart);
@@ -165,10 +179,10 @@ export default function PollGrid({ pollData, userId }: { pollData: PollData; use
 
   function slotTooltip(day: string, time: string, count: number): string {
     const pollLabel = formatTimeDisplay(time);
-    if (!isDifferentTZ) return `${pollLabel} — ${count}/${pollData.totalMembers} available`;
+    if (!isDifferentTZ) return `${pollLabel} — ${count}/${totalVoters} available`;
     const utcDate = slotToUTC(`${day}T${time}`, pollData.timezone);
     const userLabel = formatTimeInTZ(utcDate, userTimezone);
-    return `${pollLabel} ${tzAbbr(pollData.timezone)} · ${userLabel} ${tzAbbr(userTimezone)} — ${count}/${pollData.totalMembers} available`;
+    return `${pollLabel} ${tzAbbr(pollData.timezone)} · ${userLabel} ${tzAbbr(userTimezone)} — ${count}/${totalVoters} available`;
   }
 
   const toggleSlot = (slotKey: string) => {
@@ -202,42 +216,112 @@ export default function PollGrid({ pollData, userId }: { pollData: PollData; use
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ slots: Array.from(mySlots) }),
       });
-      if (res.ok) { setSaved(true); router.refresh(); }
+      if (res.ok) { setSaved(true); setViewMode('group'); router.refresh(); }
     } finally { setSaving(false); }
   };
+
+  // Voters available for the currently hovered slot
+  const hoveredSlotVoters = useMemo(() => {
+    if (!hoveredSlot) return null;
+    const available = new Set<string>();
+    const unavailable = new Set<string>();
+    for (const v of pollData.voters) {
+      if (voterSlotSets[v.discordUserId]?.has(hoveredSlot)) {
+        available.add(v.discordUserId);
+      } else {
+        unavailable.add(v.discordUserId);
+      }
+    }
+    return { available, unavailable };
+  }, [hoveredSlot, pollData.voters, voterSlotSets]);
+
+  // Determine cell color based on view mode
+  function getCellStyle(slotKey: string, isMine: boolean): { bg: string; border: string; opacity: number } {
+    const count = slotCounts[slotKey] ?? 0;
+
+    if (hoveredVoter) {
+      const isVoterSlot = voterSlotSets[hoveredVoter]?.has(slotKey);
+      if (isVoterSlot) {
+        return { bg: '#2563eb', border: '1px solid #60a5fa', opacity: 1 };
+      }
+      return { bg: '#1e1e20', border: '1px solid #2e2e31', opacity: 0.3 };
+    }
+
+    if (viewMode === 'mine') {
+      return {
+        bg: mySlotColor(isMine),
+        border: isMine ? '1px solid #60a5fa' : '1px solid #2e2e31',
+        opacity: 1,
+      };
+    }
+
+    // Group view: green heat map based on ratio of current voters
+    const wasSaved = pollData.mySlots.includes(slotKey);
+    const effectiveCount = isMine && !wasSaved ? count + 1 : !isMine && wasSaved ? count - 1 : count;
+    const bg = slotColor(effectiveCount, totalVoters);
+    const border = isMine ? '2px solid #2563eb' : effectiveCount > 0 ? '1px solid rgba(255,255,255,0.05)' : '1px solid #2e2e31';
+    return { bg, border, opacity: 1 };
+  }
 
   return (
     <div style={{ fontFamily: 'system-ui, sans-serif', maxWidth: '100%' }}>
       <style>{`
         .poll-slot { transition: filter 0.08s, background 0.08s; }
-        .poll-slot:hover { filter: brightness(1.5); }
+        .poll-slot:hover { filter: brightness(1.3); }
         .poll-slot.closed { cursor: default !important; }
         .poll-slot.closed:hover { filter: none; }
       `}</style>
 
-      {/* Toolbar: voters + timezone */}
-      <div style={{ marginBottom: 14, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', justifyContent: 'space-between' }}>
-        <div style={{ fontSize: 13, color: '#71717a' }}>
+      {/* Toolbar: voters + controls */}
+      <div style={{ marginBottom: 14, display: 'flex', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap', justifyContent: 'space-between' }}>
+        <div style={{ fontSize: 13, color: '#71717a', lineHeight: 1.6 }}>
           <span style={{ color: '#a1a1aa' }}>{pollData.voters.length}</span>
           <span> / {pollData.totalMembers} voted</span>
           {pollData.voters.length > 0 && (
-            <span> · {pollData.voters.map((v, i) => (
-              <span key={v.discordUserId}>
-                {i > 0 && ', '}
-                <span
-                  onMouseEnter={() => setHoveredVoter(v.discordUserId)}
-                  onMouseLeave={() => setHoveredVoter(null)}
-                  style={{
-                    color: hoveredVoter === v.discordUserId ? '#e2e8f0' : '#a1a1aa',
-                    cursor: 'pointer',
-                    textDecoration: hoveredVoter === v.discordUserId ? 'underline' : 'none',
-                    transition: 'color 0.1s',
-                  }}
-                >
-                  {v.discordUsername}
+            <span> · {pollData.voters.map((v, i) => {
+              const isAvailable = hoveredSlotVoters?.available.has(v.discordUserId);
+              const isUnavailable = hoveredSlotVoters?.unavailable.has(v.discordUserId);
+              const isHoveredName = hoveredVoter === v.discordUserId;
+
+              let color = '#a1a1aa';
+              let textDecoration = 'none';
+              let fontWeight: number = 400;
+              let nameOpacity = 1;
+
+              if (hoveredSlotVoters) {
+                if (isAvailable) {
+                  color = '#4ade80';
+                  fontWeight = 600;
+                } else if (isUnavailable) {
+                  color = '#52525b';
+                  textDecoration = 'line-through';
+                  nameOpacity = 0.6;
+                }
+              } else if (isHoveredName) {
+                color = '#e2e8f0';
+                textDecoration = 'underline';
+              }
+
+              return (
+                <span key={v.discordUserId}>
+                  {i > 0 && ', '}
+                  <span
+                    onMouseEnter={() => setHoveredVoter(v.discordUserId)}
+                    onMouseLeave={() => setHoveredVoter(null)}
+                    style={{
+                      color,
+                      cursor: 'pointer',
+                      textDecoration,
+                      fontWeight,
+                      opacity: nameOpacity,
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    {v.discordUsername}
+                  </span>
                 </span>
-              </span>
-            ))}</span>
+              );
+            })}</span>
           )}
           {isClosed && (
             <span style={{ background: '#7c3aed', color: '#fff', padding: '2px 8px', borderRadius: 4, fontSize: 11, marginLeft: 8, verticalAlign: 'middle' }}>
@@ -245,46 +329,73 @@ export default function PollGrid({ pollData, userId }: { pollData: PollData; use
             </span>
           )}
         </div>
-        <div style={{ display: 'flex', background: '#27272a', borderRadius: 6, padding: 2, gap: 2, flexShrink: 0 }}>
-          {[false, true].map(isUser => (
-            <button
-              key={String(isUser)}
-              onClick={() => setShowUserTZ(isUser)}
-              style={{
-                background: showUserTZ === isUser ? '#3f3f46' : 'transparent',
-                color: showUserTZ === isUser ? '#f4f4f5' : '#71717a',
-                border: 'none', borderRadius: 4, padding: '4px 12px',
-                fontSize: 12, cursor: 'pointer', transition: 'all 0.15s', whiteSpace: 'nowrap',
-              }}
-            >
-              {isUser ? `My time (${tzAbbr(userTimezone)})` : tzAbbr(pollData.timezone)}
-            </button>
-          ))}
+        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+          {/* View mode toggle */}
+          {hasSaved && (
+            <div style={{ display: 'flex', background: '#27272a', borderRadius: 6, padding: 2, gap: 2, marginRight: 8 }}>
+              {([['mine', 'Just me'], ['group', 'Group']] as const).map(([mode, label]) => (
+                <button
+                  key={mode}
+                  onClick={() => setViewMode(mode)}
+                  style={{
+                    background: viewMode === mode ? '#3f3f46' : 'transparent',
+                    color: viewMode === mode ? '#f4f4f5' : '#71717a',
+                    border: 'none', borderRadius: 4, padding: '4px 12px',
+                    fontSize: 12, cursor: 'pointer', transition: 'all 0.15s', whiteSpace: 'nowrap',
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+          {/* Timezone toggle */}
+          <div style={{ display: 'flex', background: '#27272a', borderRadius: 6, padding: 2, gap: 2 }}>
+            {[false, true].map(isUser => (
+              <button
+                key={String(isUser)}
+                onClick={() => setShowUserTZ(isUser)}
+                style={{
+                  background: showUserTZ === isUser ? '#3f3f46' : 'transparent',
+                  color: showUserTZ === isUser ? '#f4f4f5' : '#71717a',
+                  border: 'none', borderRadius: 4, padding: '4px 12px',
+                  fontSize: 12, cursor: 'pointer', transition: 'all 0.15s', whiteSpace: 'nowrap',
+                }}
+              >
+                {isUser ? `My time (${tzAbbr(userTimezone)})` : tzAbbr(pollData.timezone)}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
       {/* Legend */}
-      <div style={{ display: 'flex', gap: 20, marginBottom: 16, fontSize: 12, color: '#71717a', flexWrap: 'wrap' }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ width: 12, height: 12, background: '#4ade80', border: '2px solid #2563eb', display: 'inline-block', borderRadius: 3, flexShrink: 0 }} />
-          Your selection
-        </span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ width: 12, height: 12, background: '#16a34a', display: 'inline-block', borderRadius: 3, flexShrink: 0 }} />
-          More available
-        </span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ width: 12, height: 12, background: '#bbf7d0', display: 'inline-block', borderRadius: 3, flexShrink: 0 }} />
-          Fewer available
-        </span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ width: 12, height: 12, background: '#1e1e20', border: '1px solid #2e2e31', display: 'inline-block', borderRadius: 3, flexShrink: 0 }} />
-          No one
-        </span>
-      </div>
+      {viewMode === 'group' && hasSaved && (
+        <div style={{ display: 'flex', gap: 20, marginBottom: 16, fontSize: 12, color: '#71717a', flexWrap: 'wrap' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ width: 12, height: 12, background: '#15803d', border: '2px solid #2563eb', display: 'inline-block', borderRadius: 3, flexShrink: 0 }} />
+            You + others
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ width: 12, height: 12, background: '#15803d', display: 'inline-block', borderRadius: 3, flexShrink: 0 }} />
+            All voters available
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ width: 12, height: 12, background: '#1a3a2a', display: 'inline-block', borderRadius: 3, flexShrink: 0 }} />
+            Some available
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ width: 12, height: 12, background: '#1e1e20', border: '1px solid #2e2e31', display: 'inline-block', borderRadius: 3, flexShrink: 0 }} />
+            No one
+          </span>
+        </div>
+      )}
 
       {/* Grid */}
-      <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+      <div
+        style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}
+        onMouseLeave={() => setHoveredSlot(null)}
+      >
         <div style={{
           display: 'flex',
           userSelect: 'none',
@@ -293,7 +404,6 @@ export default function PollGrid({ pollData, userId }: { pollData: PollData; use
 
           {/* Time-label column */}
           <div style={{ width: TIME_W, flexShrink: 0 }}>
-            {/* Header spacer */}
             <div style={{ height: HEADER_H }} />
             {times.map((t, i) => {
               const isHour = t.endsWith(':00');
@@ -320,13 +430,12 @@ export default function PollGrid({ pollData, userId }: { pollData: PollData; use
             })}
           </div>
 
-          {/* Day columns — flex:1 so they fill available space evenly */}
+          {/* Day columns */}
           {days.map((day, dayIdx) => {
             const { day: dayLabel, date: dateLabel, isWeekend } = displayDayLabel(day);
             const isWeekStart = dayLabel === 'Sun' && dayIdx > 0;
             return (
               <div key={day} style={{ flex: 1, minWidth: 38, marginLeft: isWeekStart ? 10 : 3 }}>
-                {/* Day header */}
                 <div style={{
                   height: HEADER_H,
                   display: 'flex',
@@ -350,48 +459,22 @@ export default function PollGrid({ pollData, userId }: { pollData: PollData; use
                   </div>
                 </div>
 
-                {/* Cells */}
                 {times.map((time, i) => {
                   const slotKey = `${day}T${time}`;
                   const isMine = mySlots.has(slotKey);
-                  const count = slotCounts[slotKey] ?? 0;
                   const isHour = time.endsWith(':00');
                   const gap = i === 0 ? 4 : isHour ? HOUR_GAP : HALF_GAP;
 
-                  const isHoveredVoterSlot = hoveredVoter ? voterSlotSets[hoveredVoter]?.has(slotKey) : false;
+                  const { bg, border, opacity } = getCellStyle(slotKey, isMine);
 
-                  // Effective count: include unsaved local selections
-                  const wasSaved = pollData.mySlots.includes(slotKey);
-                  const effectiveCount = isMine && !wasSaved ? count + 1 : !isMine && wasSaved ? count - 1 : count;
-
-                  let bg: string;
-                  let border: string;
-                  let opacity = 1;
-
-                  if (hoveredVoter) {
-                    if (isHoveredVoterSlot) {
-                      bg = '#2563eb';
-                      border = '1px solid #60a5fa';
-                    } else {
-                      bg = '#1e1e20';
-                      border = '1px solid #2e2e31';
-                      opacity = 0.3;
-                    }
-                  } else if (isMine) {
-                    bg = slotColor(effectiveCount, pollData.totalMembers);
-                    border = '2px solid #2563eb';
-                  } else {
-                    bg = slotColor(effectiveCount, pollData.totalMembers);
-                    border = effectiveCount > 0 ? 'none' : '1px solid #2e2e31';
-                  }
-
-                  // Build tooltip with voter names
+                  // Tooltip with voter names
+                  const count = slotCounts[slotKey] ?? 0;
                   const availableVoters = pollData.voters
                     .filter(v => voterSlotSets[v.discordUserId]?.has(slotKey))
                     .map(v => v.discordUsername);
-                  const tooltipParts = [slotTooltip(day, time, effectiveCount)];
-                  if (availableVoters.length > 0) {
-                    tooltipParts.push(availableVoters.join(', '));
+                  const tooltipLines = [slotTooltip(day, time, count)];
+                  if (viewMode === 'group' && availableVoters.length > 0) {
+                    tooltipLines.push('Available: ' + availableVoters.join(', '));
                   }
 
                   return (
@@ -408,9 +491,10 @@ export default function PollGrid({ pollData, userId }: { pollData: PollData; use
                         opacity,
                         transition: 'opacity 0.15s, background 0.08s',
                       }}
-                      title={tooltipParts.join('\n')}
+                      title={tooltipLines.join('\n')}
                       onMouseDown={() => handleMouseDown(slotKey)}
-                      onMouseEnter={() => handleMouseEnter(slotKey)}
+                      onMouseEnter={() => { handleMouseEnter(slotKey); setHoveredSlot(slotKey); }}
+                      onMouseLeave={() => setHoveredSlot(null)}
                       onTouchStart={() => handleMouseDown(slotKey)}
                     />
                   );
