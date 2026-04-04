@@ -33,7 +33,7 @@ export default async function PollPage({ params }: { params: { pollId: string } 
           <div style={styles.logo}>🌈</div>
           <h1 style={styles.title}>Streaming Rainbow</h1>
           <h2 style={{ ...styles.subtitle, fontSize: 20, color: '#ccc', marginBottom: 8 }}>
-            Schedule a session for
+            {poll.gameId ? 'Schedule a session for' : 'Schedule a meeting'}
           </h2>
           <h3 style={{ fontSize: 24, color: '#fff', margin: '0 0 24px' }}>{poll.gameName}</h3>
           <p style={{ color: '#888', marginBottom: 24, fontSize: 14 }}>
@@ -91,7 +91,7 @@ export default async function PollPage({ params }: { params: { pollId: string } 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 24 }}>
           <div>
             <div style={styles.logo}>🌈</div>
-            <h1 style={styles.title}>Schedule a session</h1>
+            <h1 style={styles.title}>{poll.gameId ? 'Schedule a session' : 'Schedule a meeting'}</h1>
             <h2 style={{ margin: 0, fontSize: 18, color: '#a78bfa', fontWeight: 500 }}>{poll.gameName}</h2>
           </div>
           <div style={{ textAlign: 'right', fontSize: 13, color: '#666' }}>
