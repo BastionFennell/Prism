@@ -266,9 +266,7 @@ export default function PollGrid({ pollData, userId }: { pollData: PollData; use
       {/* Legend */}
       <div style={{ display: 'flex', gap: 20, marginBottom: 16, fontSize: 12, color: '#71717a', flexWrap: 'wrap' }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ width: 12, height: 12, background: '#16a34a', display: 'inline-block', borderRadius: 3, flexShrink: 0, position: 'relative' }}>
-            <span style={{ position: 'absolute', top: 3, left: 3, width: 6, height: 6, background: '#2563eb', borderRadius: 2 }} />
-          </span>
+          <span style={{ width: 12, height: 12, background: '#4ade80', border: '2px solid #2563eb', display: 'inline-block', borderRadius: 3, flexShrink: 0 }} />
           Your selection
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -379,6 +377,9 @@ export default function PollGrid({ pollData, userId }: { pollData: PollData; use
                       border = '1px solid #2e2e31';
                       opacity = 0.3;
                     }
+                  } else if (isMine) {
+                    bg = slotColor(effectiveCount, pollData.totalMembers);
+                    border = '2px solid #2563eb';
                   } else {
                     bg = slotColor(effectiveCount, pollData.totalMembers);
                     border = effectiveCount > 0 ? 'none' : '1px solid #2e2e31';
@@ -406,27 +407,12 @@ export default function PollGrid({ pollData, userId }: { pollData: PollData; use
                         cursor: isClosed ? 'default' : 'pointer',
                         opacity,
                         transition: 'opacity 0.15s, background 0.08s',
-                        position: 'relative',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
                       }}
                       title={tooltipParts.join('\n')}
                       onMouseDown={() => handleMouseDown(slotKey)}
                       onMouseEnter={() => handleMouseEnter(slotKey)}
                       onTouchStart={() => handleMouseDown(slotKey)}
-                    >
-                      {isMine && !hoveredVoter && (
-                        <div style={{
-                          width: 8,
-                          height: 8,
-                          borderRadius: 2,
-                          background: '#2563eb',
-                          border: '1px solid #93c5fd',
-                          flexShrink: 0,
-                        }} />
-                      )}
-                    </div>
+                    />
                   );
                 })}
               </div>
