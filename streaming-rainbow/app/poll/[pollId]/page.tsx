@@ -108,7 +108,7 @@ export default async function PollPage({ params }: { params: { pollId: string } 
 
         {topSlots.length > 0 && (
           <div style={{ marginBottom: 24 }}>
-            <h3 style={{ fontSize: 14, color: '#888', margin: '0 0 8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            <h3 style={{ fontSize: 13, color: '#71717a', margin: '0 0 8px', fontWeight: 600, letterSpacing: '0.02em' }}>
               Top availability spots
             </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -131,7 +131,7 @@ export default async function PollPage({ params }: { params: { pollId: string } 
           </div>
         )}
 
-        <h3 style={{ fontSize: 14, color: '#888', margin: '0 0 12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        <h3 style={{ fontSize: 13, color: '#71717a', margin: '0 0 12px', fontWeight: 600, letterSpacing: '0.02em' }}>
           Mark your availability — click or drag to toggle
         </h3>
 

@@ -290,10 +290,11 @@ export default function PollGrid({ pollData, userId }: { pollData: PollData; use
           </div>
 
           {/* Day columns — flex:1 so they fill available space evenly */}
-          {days.map(day => {
+          {days.map((day, dayIdx) => {
             const { day: dayLabel, date: dateLabel, isWeekend } = displayDayLabel(day);
+            const isWeekStart = dayLabel === 'Sun' && dayIdx > 0;
             return (
-              <div key={day} style={{ flex: 1, minWidth: 38, marginLeft: 3 }}>
+              <div key={day} style={{ flex: 1, minWidth: 38, marginLeft: isWeekStart ? 10 : 3 }}>
                 {/* Day header */}
                 <div style={{
                   height: HEADER_H,

@@ -108,7 +108,7 @@ export class MeetingPollService {
       },
       body: JSON.stringify({
         guildId: params.guildId,
-        gameId: -1,
+        gameId: null,
         gameName: params.title,
         memberDiscordIds: params.memberDiscordIds,
         dateRangeStart: params.dateRangeStart,
