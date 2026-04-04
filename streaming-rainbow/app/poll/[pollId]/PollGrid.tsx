@@ -122,7 +122,8 @@ export default function PollGrid({ pollData, userId }: { pollData: PollData; use
   const touchStartSlot = useRef<string | null>(null);
   const touchMoved = useRef(false);
   const lastTouchSlot = useRef<string | null>(null);
-  const twoFingerScrollStart = useRef<{ x: number; scrollLeft: number } | null>(null);
+  const isTwoFingerGesture = useRef(false);
+  const twoFingerStart = useRef<{ x: number; y: number; scrollLeft: number; pageScrollY: number } | null>(null);
 
   useEffect(() => {
     setIsTouchDevice('ontouchstart' in window || navigator.maxTouchPoints > 0);
@@ -245,14 +246,19 @@ export default function PollGrid({ pollData, userId }: { pollData: PollData; use
     if (isClosed) return;
 
     if (touchMode === 'select') {
-      if (e.touches.length === 2) {
-        // Two-finger: start manual scroll
-        const container = scrollContainerRef.current;
-        if (container) {
-          const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-          twoFingerScrollStart.current = { x: midX, scrollLeft: container.scrollLeft };
-        }
+      if (e.touches.length >= 2) {
+        // Two-finger: manual scroll (both axes)
+        isTwoFingerGesture.current = true;
         isDragging.current = false;
+        const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        const container = scrollContainerRef.current;
+        twoFingerStart.current = {
+          x: midX,
+          y: midY,
+          scrollLeft: container?.scrollLeft ?? 0,
+          pageScrollY: window.scrollY,
+        };
         return;
       }
 
@@ -262,6 +268,7 @@ export default function PollGrid({ pollData, userId }: { pollData: PollData; use
       if (!slot) return;
 
       e.preventDefault(); // Prevent scroll in select mode
+      isTwoFingerGesture.current = false;
       isDragging.current = true;
       dragMode.current = mySlots.has(slot) ? 'remove' : 'add';
       lastTouchSlot.current = slot;
@@ -279,13 +286,18 @@ export default function PollGrid({ pollData, userId }: { pollData: PollData; use
     if (isClosed) return;
 
     if (touchMode === 'select') {
-      if (e.touches.length === 2) {
-        // Two-finger scroll
-        const container = scrollContainerRef.current;
-        const start = twoFingerScrollStart.current;
-        if (container && start) {
+      if (isTwoFingerGesture.current || e.touches.length >= 2) {
+        // Manual two-finger scroll (both axes)
+        isTwoFingerGesture.current = true;
+        isDragging.current = false;
+        if (e.touches.length >= 2 && twoFingerStart.current) {
           const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-          container.scrollLeft = start.scrollLeft - (midX - start.x);
+          const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+          const container = scrollContainerRef.current;
+          if (container) {
+            container.scrollLeft = twoFingerStart.current.scrollLeft - (midX - twoFingerStart.current.x);
+          }
+          window.scrollTo(0, twoFingerStart.current.pageScrollY - (midY - twoFingerStart.current.y));
         }
         return;
       }
@@ -315,7 +327,8 @@ export default function PollGrid({ pollData, userId }: { pollData: PollData; use
     if (touchMode === 'select') {
       isDragging.current = false;
       lastTouchSlot.current = null;
-      twoFingerScrollStart.current = null;
+      isTwoFingerGesture.current = false;
+      twoFingerStart.current = null;
     } else {
       // Scroll mode: if finger didn't move, it's a tap → toggle
       if (!touchMoved.current && touchStartSlot.current) {
