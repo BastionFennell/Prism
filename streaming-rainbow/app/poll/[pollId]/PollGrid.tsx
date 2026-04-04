@@ -293,7 +293,7 @@ export default function PollGrid({ pollData, userId }: { pollData: PollData; use
           {days.map(day => {
             const { day: dayLabel, date: dateLabel, isWeekend } = displayDayLabel(day);
             return (
-              <div key={day} style={{ flex: 1, minWidth: 28, marginLeft: 3 }}>
+              <div key={day} style={{ flex: 1, minWidth: 38, marginLeft: 3 }}>
                 {/* Day header */}
                 <div style={{
                   height: HEADER_H,
