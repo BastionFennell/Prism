@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
       expiresAt,
     } = body;
 
-    if (!guildId || !gameId || !gameName || !memberDiscordIds || !dateRangeStart ||
+    if (!guildId || !gameName || !memberDiscordIds || !dateRangeStart ||
         !dateRangeEnd || !sessionDurationMinutes || !dailyWindowStart || !dailyWindowEnd ||
         !timezone || !expiresAt) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });

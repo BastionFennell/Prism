@@ -10,7 +10,7 @@ datasource db {
 model Poll {
   id                     String         @id @default(cuid())
   guildId                String
-  gameId                 Int
+  gameId                 Int?
   gameName               String
   memberDiscordIds       String         // JSON array of discord user IDs
   dateRangeStart         DateTime
