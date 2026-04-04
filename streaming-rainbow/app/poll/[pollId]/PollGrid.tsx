@@ -541,6 +541,13 @@ export default function PollGrid({ pollData, userId }: { pollData: PollData; use
         </div>
       )}
 
+      {/* Mobile tip */}
+      {isTouchDevice && !isClosed && (
+        <div style={{ fontSize: 12, color: '#52525b', marginBottom: 12, lineHeight: 1.5 }}>
+          Tip: Use two fingers to scroll, or switch to scroll mode above.
+        </div>
+      )}
+
       {/* Grid */}
       <div
         ref={scrollContainerRef}
