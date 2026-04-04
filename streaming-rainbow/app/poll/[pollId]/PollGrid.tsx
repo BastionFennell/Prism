@@ -265,17 +265,24 @@ export default function PollGrid({ pollData, userId }: { pollData: PollData; use
 
       {/* Legend */}
       <div style={{ display: 'flex', gap: 20, marginBottom: 16, fontSize: 12, color: '#71717a', flexWrap: 'wrap' }}>
-        {[
-          { color: '#2563eb', border: '1px solid #3b82f6', label: 'Only you' },
-          { color: '#7c3aed', border: '1px solid #a78bfa', label: 'You + others' },
-          { color: '#16a34a', border: 'none', label: 'Others (not you)' },
-          { color: '#1e1e20', border: '1px solid #2e2e31', label: 'No one' },
-        ].map(({ color, border, label }) => (
-          <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ width: 12, height: 12, background: color, border, display: 'inline-block', borderRadius: 3, flexShrink: 0 }} />
-            {label}
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ width: 12, height: 12, background: '#16a34a', display: 'inline-block', borderRadius: 3, flexShrink: 0, position: 'relative' }}>
+            <span style={{ position: 'absolute', top: 3, left: 3, width: 6, height: 6, background: '#2563eb', borderRadius: 2 }} />
           </span>
-        ))}
+          Your selection
+        </span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ width: 12, height: 12, background: '#16a34a', display: 'inline-block', borderRadius: 3, flexShrink: 0 }} />
+          More available
+        </span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ width: 12, height: 12, background: '#bbf7d0', display: 'inline-block', borderRadius: 3, flexShrink: 0 }} />
+          Fewer available
+        </span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ width: 12, height: 12, background: '#1e1e20', border: '1px solid #2e2e31', display: 'inline-block', borderRadius: 3, flexShrink: 0 }} />
+          No one
+        </span>
       </div>
 
       {/* Grid */}
@@ -353,41 +360,37 @@ export default function PollGrid({ pollData, userId }: { pollData: PollData; use
                   const isHour = time.endsWith(':00');
                   const gap = i === 0 ? 4 : isHour ? HOUR_GAP : HALF_GAP;
 
-                  const wasSaved = pollData.mySlots.includes(slotKey);
-                  const othersCount = wasSaved ? count - 1 : count;
                   const isHoveredVoterSlot = hoveredVoter ? voterSlotSets[hoveredVoter]?.has(slotKey) : false;
+
+                  // Effective count: include unsaved local selections
+                  const wasSaved = pollData.mySlots.includes(slotKey);
+                  const effectiveCount = isMine && !wasSaved ? count + 1 : !isMine && wasSaved ? count - 1 : count;
 
                   let bg: string;
                   let border: string;
                   let opacity = 1;
 
                   if (hoveredVoter) {
-                    // Hover-filter mode: highlight hovered voter's slots
-                    if (isHoveredVoterSlot && isMine) {
-                      bg = '#7c3aed'; // overlap with hovered voter
-                      border = '1px solid #a78bfa';
-                    } else if (isHoveredVoterSlot) {
-                      bg = '#16a34a';
-                      border = 'none';
-                    } else if (isMine) {
+                    if (isHoveredVoterSlot) {
                       bg = '#2563eb';
                       border = '1px solid #60a5fa';
-                      opacity = 0.3;
                     } else {
                       bg = '#1e1e20';
                       border = '1px solid #2e2e31';
                       opacity = 0.3;
                     }
-                  } else if (isMine && othersCount > 0) {
-                    // Overlap: you + others
-                    bg = '#7c3aed';
-                    border = '1px solid #a78bfa';
-                  } else if (isMine) {
-                    bg = '#2563eb';
-                    border = '1px solid #60a5fa';
                   } else {
-                    bg = slotColor(count, pollData.totalMembers);
-                    border = count > 0 ? 'none' : '1px solid #2e2e31';
+                    bg = slotColor(effectiveCount, pollData.totalMembers);
+                    border = effectiveCount > 0 ? 'none' : '1px solid #2e2e31';
+                  }
+
+                  // Build tooltip with voter names
+                  const availableVoters = pollData.voters
+                    .filter(v => voterSlotSets[v.discordUserId]?.has(slotKey))
+                    .map(v => v.discordUsername);
+                  const tooltipParts = [slotTooltip(day, time, effectiveCount)];
+                  if (availableVoters.length > 0) {
+                    tooltipParts.push(availableVoters.join(', '));
                   }
 
                   return (
@@ -403,12 +406,27 @@ export default function PollGrid({ pollData, userId }: { pollData: PollData; use
                         cursor: isClosed ? 'default' : 'pointer',
                         opacity,
                         transition: 'opacity 0.15s, background 0.08s',
+                        position: 'relative',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
                       }}
-                      title={slotTooltip(day, time, count)}
+                      title={tooltipParts.join('\n')}
                       onMouseDown={() => handleMouseDown(slotKey)}
                       onMouseEnter={() => handleMouseEnter(slotKey)}
                       onTouchStart={() => handleMouseDown(slotKey)}
-                    />
+                    >
+                      {isMine && !hoveredVoter && (
+                        <div style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: 2,
+                          background: '#2563eb',
+                          border: '1px solid #93c5fd',
+                          flexShrink: 0,
+                        }} />
+                      )}
+                    </div>
                   );
                 })}
               </div>
