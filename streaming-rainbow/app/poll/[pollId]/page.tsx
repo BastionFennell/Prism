@@ -80,6 +80,7 @@ export default async function PollPage({ params }: { params: { pollId: string } 
     voters: poll.availabilities.map(a => ({
       discordUserId: a.discordUserId,
       discordUsername: a.discordUsername,
+      slots: JSON.parse(a.slots) as string[],
     })),
     mySlots,
     slotCounts,

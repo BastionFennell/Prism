@@ -15,7 +15,7 @@ interface PollData {
   expiresAt: string;
   status: string;
   totalMembers: number;
-  voters: { discordUserId: string; discordUsername: string }[];
+  voters: { discordUserId: string; discordUsername: string; slots: string[] }[];
   mySlots: string[];
   slotCounts: Record<string, number>;
 }
@@ -92,6 +92,7 @@ export default function PollGrid({ pollData, userId }: { pollData: PollData; use
   const [saved, setSaved] = useState(false);
   const [slotCounts] = useState(pollData.slotCounts);
   const [showUserTZ, setShowUserTZ] = useState(false);
+  const [hoveredVoter, setHoveredVoter] = useState<string | null>(null);
   const isDragging = useRef(false);
   const dragMode = useRef<'add' | 'remove'>('add');
   const isClosed = pollData.status !== 'collecting';
@@ -128,6 +129,14 @@ export default function PollGrid({ pollData, userId }: { pollData: PollData; use
     for (let m = start; m < end; m += 30) result.push(minutesToTime(m));
     return result;
   }, [pollData.dailyWindowStart, pollData.dailyWindowEnd]);
+
+  const voterSlotSets = useMemo(() => {
+    const map: Record<string, Set<string>> = {};
+    for (const v of pollData.voters) {
+      map[v.discordUserId] = new Set(v.slots);
+    }
+    return map;
+  }, [pollData.voters]);
 
   const firstDay = days[0] ?? '2000-01-01';
   const windowStartMin = parseTime(pollData.dailyWindowStart);
@@ -210,9 +219,25 @@ export default function PollGrid({ pollData, userId }: { pollData: PollData; use
       <div style={{ marginBottom: 14, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', justifyContent: 'space-between' }}>
         <div style={{ fontSize: 13, color: '#71717a' }}>
           <span style={{ color: '#a1a1aa' }}>{pollData.voters.length}</span>
-          <span> / {pollData.totalMembers} players voted</span>
+          <span> / {pollData.totalMembers} voted</span>
           {pollData.voters.length > 0 && (
-            <span style={{ color: '#71717a' }}> · {pollData.voters.map(v => v.discordUsername).join(', ')}</span>
+            <span> · {pollData.voters.map((v, i) => (
+              <span key={v.discordUserId}>
+                {i > 0 && ', '}
+                <span
+                  onMouseEnter={() => setHoveredVoter(v.discordUserId)}
+                  onMouseLeave={() => setHoveredVoter(null)}
+                  style={{
+                    color: hoveredVoter === v.discordUserId ? '#e2e8f0' : '#a1a1aa',
+                    cursor: 'pointer',
+                    textDecoration: hoveredVoter === v.discordUserId ? 'underline' : 'none',
+                    transition: 'color 0.1s',
+                  }}
+                >
+                  {v.discordUsername}
+                </span>
+              </span>
+            ))}</span>
           )}
           {isClosed && (
             <span style={{ background: '#7c3aed', color: '#fff', padding: '2px 8px', borderRadius: 4, fontSize: 11, marginLeft: 8, verticalAlign: 'middle' }}>
@@ -241,9 +266,10 @@ export default function PollGrid({ pollData, userId }: { pollData: PollData; use
       {/* Legend */}
       <div style={{ display: 'flex', gap: 20, marginBottom: 16, fontSize: 12, color: '#71717a', flexWrap: 'wrap' }}>
         {[
-          { color: '#2563eb', border: '1px solid #3b82f6', label: 'Your selection' },
-          { color: '#16a34a', border: 'none', label: 'Everyone available' },
-          { color: '#1e1e20', border: '1px solid #2e2e31', label: 'No one available' },
+          { color: '#2563eb', border: '1px solid #3b82f6', label: 'Only you' },
+          { color: '#7c3aed', border: '1px solid #a78bfa', label: 'You + others' },
+          { color: '#16a34a', border: 'none', label: 'Others (not you)' },
+          { color: '#1e1e20', border: '1px solid #2e2e31', label: 'No one' },
         ].map(({ color, border, label }) => (
           <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ width: 12, height: 12, background: color, border, display: 'inline-block', borderRadius: 3, flexShrink: 0 }} />
@@ -327,9 +353,36 @@ export default function PollGrid({ pollData, userId }: { pollData: PollData; use
                   const isHour = time.endsWith(':00');
                   const gap = i === 0 ? 4 : isHour ? HOUR_GAP : HALF_GAP;
 
+                  const wasSaved = pollData.mySlots.includes(slotKey);
+                  const othersCount = wasSaved ? count - 1 : count;
+                  const isHoveredVoterSlot = hoveredVoter ? voterSlotSets[hoveredVoter]?.has(slotKey) : false;
+
                   let bg: string;
                   let border: string;
-                  if (isMine) {
+                  let opacity = 1;
+
+                  if (hoveredVoter) {
+                    // Hover-filter mode: highlight hovered voter's slots
+                    if (isHoveredVoterSlot && isMine) {
+                      bg = '#7c3aed'; // overlap with hovered voter
+                      border = '1px solid #a78bfa';
+                    } else if (isHoveredVoterSlot) {
+                      bg = '#16a34a';
+                      border = 'none';
+                    } else if (isMine) {
+                      bg = '#2563eb';
+                      border = '1px solid #60a5fa';
+                      opacity = 0.3;
+                    } else {
+                      bg = '#1e1e20';
+                      border = '1px solid #2e2e31';
+                      opacity = 0.3;
+                    }
+                  } else if (isMine && othersCount > 0) {
+                    // Overlap: you + others
+                    bg = '#7c3aed';
+                    border = '1px solid #a78bfa';
+                  } else if (isMine) {
                     bg = '#2563eb';
                     border = '1px solid #60a5fa';
                   } else {
@@ -348,6 +401,8 @@ export default function PollGrid({ pollData, userId }: { pollData: PollData; use
                         border,
                         borderRadius: 4,
                         cursor: isClosed ? 'default' : 'pointer',
+                        opacity,
+                        transition: 'opacity 0.15s, background 0.08s',
                       }}
                       title={slotTooltip(day, time, count)}
                       onMouseDown={() => handleMouseDown(slotKey)}
