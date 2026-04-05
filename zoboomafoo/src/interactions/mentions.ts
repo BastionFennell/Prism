@@ -2,6 +2,9 @@ import { Message } from 'discord.js';
 import { eq } from 'drizzle-orm';
 import { db } from '../db';
 import { reactionBannedChannels } from '../db/schema';
+import { loadConfig } from '../config';
+import { isFounder } from '../permissions';
+import { YouTubeAIService } from '../services/YouTubeAIService';
 
 const RESPONSES = [
   'ZABOOOO!! 🦎🎉',
@@ -42,5 +45,49 @@ export async function handleMention(message: Message): Promise<void> {
     .all();
   if (banned.length > 0) return;
 
-  await message.reply(pick(RESPONSES));
+  // Strip the bot mention to get the actual question
+  const content = message.content
+    .replace(new RegExp(`<@!?${message.client.user.id}>`, 'g'), '')
+    .trim();
+
+  // Founders with a question get AI-powered responses
+  const config = loadConfig();
+  const member = message.member;
+  if (member && isFounder(member, config) && content.length > 0) {
+    await handleFounderMention(message, content);
+  } else {
+    await message.reply(pick(RESPONSES));
+  }
+}
+
+async function handleFounderMention(message: Message, question: string): Promise<void> {
+  // Rate limit check
+  if (!YouTubeAIService.checkRateLimit(message.author.id)) {
+    await message.reply('Hold your lemurs! I\'m still catching my breath from the last question. Try again in a few seconds! 🦎💨');
+    return;
+  }
+
+  // Show typing indicator
+  await message.channel.sendTyping();
+
+  try {
+    const aiService = new YouTubeAIService(message.client);
+    const response = await aiService.answer(question);
+
+    if (response.length > 2000) {
+      const reply = await message.reply(response.slice(0, 1997) + '...');
+      const thread = await reply.startThread({ name: 'Zoboomafoo Analysis' });
+      const remaining = response.slice(1997);
+      for (let i = 0; i < remaining.length; i += 2000) {
+        await thread.send(remaining.slice(i, i + 2000));
+      }
+    } else {
+      await message.reply(response);
+    }
+  } catch (err) {
+    console.error('[mentions] AI response error:', err);
+    await message.reply(
+      'Oops! Zoboomafoo got tangled up in the vines trying to fetch that data. Try again in a moment! 🦎🌿'
+    );
+  }
 }
