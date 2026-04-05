@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
 
   const params = new URLSearchParams({
     client_id: process.env.GOOGLE_CLIENT_ID!,
-    redirect_uri: `${process.env.NEXTAUTH_URL}/api/youtube/callback`,
+    redirect_uri: `${(process.env.NEXTAUTH_URL ?? '').replace(/\/$/, '')}/api/youtube/callback`,
     response_type: 'code',
     scope: [
       'https://www.googleapis.com/auth/youtube.readonly',

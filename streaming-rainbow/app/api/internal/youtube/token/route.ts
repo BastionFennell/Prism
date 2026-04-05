@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
       if (!refreshed.access_token) {
         return NextResponse.json({
           error: 'Token refresh failed — reauthorization required',
-          reauthorizeUrl: `${process.env.NEXTAUTH_URL}/youtube/authorize`,
+          reauthorizeUrl: `${(process.env.NEXTAUTH_URL ?? '').replace(/\/$/, '')}/youtube/authorize`,
         }, { status: 401 });
       }
 
@@ -58,7 +58,7 @@ export async function GET(req: NextRequest) {
       console.error('YouTube token refresh error:', err);
       return NextResponse.json({
         error: 'Token refresh failed',
-        reauthorizeUrl: `${process.env.NEXTAUTH_URL}/youtube/authorize`,
+        reauthorizeUrl: `${(process.env.NEXTAUTH_URL ?? '').replace(/\/$/, '')}/youtube/authorize`,
       }, { status: 401 });
     }
   }

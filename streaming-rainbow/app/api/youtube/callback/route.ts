@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
       code,
       client_id: process.env.GOOGLE_CLIENT_ID!,
       client_secret: process.env.GOOGLE_CLIENT_SECRET!,
-      redirect_uri: `${process.env.NEXTAUTH_URL}/api/youtube/callback`,
+      redirect_uri: `${(process.env.NEXTAUTH_URL ?? '').replace(/\/$/, '')}/api/youtube/callback`,
       grant_type: 'authorization_code',
     }),
   });
